@@ -398,6 +398,68 @@ input[type="text"],
   margin: 0;
 }
 
+.coordinate-jump {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  gap: 5px;
+  border: 1px solid #59636f;
+  border-radius: 7px;
+  padding: 0 4px 0 9px;
+  background: #222831;
+  color: var(--muted);
+}
+
+.coordinate-jump label {
+  margin: 0;
+  color: var(--cyan);
+  font-size: 10px;
+}
+
+.coordinate-jump input {
+  width: 54px;
+  height: 24px;
+  border: 1px solid #68737e;
+  border-radius: 5px;
+  outline: none;
+  padding: 0 4px;
+  background: #141a20;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.coordinate-jump input:focus {
+  border-color: var(--cyan);
+}
+
+.coordinate-jump button {
+  height: 24px;
+  border: 1px solid #f4c257;
+  border-radius: 5px;
+  padding: 0 9px;
+  background: var(--gold);
+  color: #16110a;
+  font-size: 10px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.coordinate-jump button:active {
+  transform: translateY(1px);
+}
+
+.target-status {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--cyan);
+  font-size: 10px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .voice-picker select:focus-visible {
   border-color: #d9faff;
   border-left-color: var(--cyan);

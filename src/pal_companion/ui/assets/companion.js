@@ -10,6 +10,10 @@ const voiceFilter = document.querySelector("#voiceFilter");
 const voiceFilterText = document.querySelector("#voiceFilterText");
 const voiceSelect = document.querySelector("#voiceSelect");
 const playerLevel = document.querySelector("#playerLevel");
+const targetX = document.querySelector("#targetX");
+const targetY = document.querySelector("#targetY");
+const placeTargetButton = document.querySelector("#placeTargetButton");
+const targetStatus = document.querySelector("#targetStatus");
 const voiceStatus = document.querySelector("#voiceStatus");
 const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
@@ -186,17 +190,23 @@ function markerCommand(markers) {
     .map((marker) => `${Number(marker.x)},${Number(marker.y)}`)
     .join(";");
   window.location.hash = `palmarkers=${Date.now()};${payload}`;
-  markerStatus.textContent =
-    `${markers.length} MARKER${markers.length === 1 ? "" : "S"} REQUESTED IN GAME`;
+  setMarkerStatus(
+    `${markers.length} MARKER${markers.length === 1 ? "" : "S"} REQUESTED IN GAME`
+  );
+}
+
+function setMarkerStatus(message) {
+  markerStatus.textContent = message;
+  targetStatus.textContent = message;
 }
 
 async function copyMarker(marker) {
   const text = `${marker.x}, ${marker.y}`;
   try {
     await navigator.clipboard.writeText(text);
-    markerStatus.textContent = `COPIED ${text}`;
+    setMarkerStatus(`COPIED ${text}`);
   } catch {
-    markerStatus.textContent = `COORDINATES ${text}`;
+    setMarkerStatus(`COORDINATES ${text}`);
   }
 }
 
@@ -213,18 +223,32 @@ function activateMarkers(markers) {
   navigator.clipboard
     .writeText(markers.map((marker) => `${marker.label}: ${marker.x}, ${marker.y}`).join("\n"))
     .then(() => {
-      markerStatus.textContent = `${markers.length} MARKERS COPIED`;
+      setMarkerStatus(`${markers.length} MARKERS COPIED`);
     })
     .catch(() => {
-      markerStatus.textContent = "COPY UNAVAILABLE";
+      setMarkerStatus("COPY UNAVAILABLE");
     });
+}
+
+function placeManualTarget() {
+  const x = Number(targetX.value);
+  const y = Number(targetY.value);
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !targetX.value || !targetY.value) {
+    setMarkerStatus("ENTER X AND Y");
+    return;
+  }
+  if (Math.abs(x) > 5000 || Math.abs(y) > 5000) {
+    setMarkerStatus("COORDINATES OUT OF RANGE");
+    return;
+  }
+  activateMarkers([{ label: "Manual target", x, y }]);
 }
 
 function renderMarkers(markers) {
   currentMarkers = markers;
   markersRoot.replaceChildren();
   markerSection.hidden = markers.length === 0;
-  markerStatus.textContent = "";
+  setMarkerStatus("");
   placeAllButton.textContent = gameClient ? "PLACE ALL" : "COPY ALL";
 
   markers.forEach((marker) => {
@@ -383,6 +407,15 @@ playerLevel.addEventListener("change", () => {
 readButton.addEventListener("click", readAnswer);
 stopVoiceButton.addEventListener("click", () => stopVoice());
 placeAllButton.addEventListener("click", () => activateMarkers(currentMarkers));
+placeTargetButton.addEventListener("click", placeManualTarget);
+[targetX, targetY].forEach((input) => {
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      placeManualTarget();
+    }
+  });
+});
 
 renderHistory();
 checkHealth();

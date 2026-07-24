@@ -80,6 +80,15 @@
               placeholder="--"
             />
           </label>
+          <div class="coordinate-jump">
+            <span>MAP TARGET</span>
+            <label for="targetX">X</label>
+            <input id="targetX" type="number" step="any" placeholder="0" />
+            <label for="targetY">Y</label>
+            <input id="targetY" type="number" step="any" placeholder="0" />
+            <button id="placeTargetButton" type="button">PIN</button>
+          </div>
+          <span id="targetStatus" class="target-status"></span>
           <span id="voiceStatus" class="voice-status">CONNECTING VOICE</span>
         </div>
       </section>

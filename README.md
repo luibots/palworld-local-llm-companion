@@ -37,6 +37,8 @@ feature: the spoken briefing is sent to Microsoft's voice service, while game da
 credentials, and Ollama stay local.
 Answers with map coordinates expose copy controls in a normal browser and local
 Palworld marker controls when opened through the client-only UE4SS overlay.
+The always-available `MAP TARGET` control also accepts an exact X/Y pair and places
+a native custom marker, avoiding manual map panning.
 
 ## Surfaces
 
