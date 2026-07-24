@@ -33,6 +33,7 @@ const history = JSON.parse(localStorage.getItem("pal-companion-history") || "[]"
 const gameClient = new URLSearchParams(window.location.search).get("client") === "ue4ss";
 const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voice)|be\s+quiet|silence|shut\s+up)(?:\s+to\s+me)?[.!]?$/i;
 let currentAnswer = "";
+let currentSpokenSummary = "";
 let currentMarkers = [];
 let currentAudio = null;
 let currentAudioUrl = null;
@@ -140,8 +141,8 @@ function spokenVersion(text) {
 
 async function readAnswer() {
   if (!neuralVoiceReady || !currentAnswer) return;
-  stopVoice("GENERATING VOICE");
-  setVoiceState(true, "GENERATING VOICE");
+  stopVoice("PREPARING BRIEF");
+  setVoiceState(true, "PREPARING BRIEF");
   const controller = new AbortController();
   voiceAbortController = controller;
 
@@ -151,7 +152,7 @@ async function readAnswer() {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        text: spokenVersion(currentAnswer),
+        text: spokenVersion(currentSpokenSummary || currentAnswer),
         voice: voiceSelect.value,
       }),
       signal: controller.signal,
@@ -166,7 +167,7 @@ async function readAnswer() {
     currentAudioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(currentAudioUrl);
     currentAudio = audio;
-    audio.addEventListener("play", () => setVoiceState(true, "READING ANSWER"));
+    audio.addEventListener("play", () => setVoiceState(true, "READING BRIEF"));
     audio.addEventListener("ended", () => stopVoice("NEURAL VOICE READY"));
     audio.addEventListener("error", () => stopVoice("VOICE ERROR"));
     await audio.play();
@@ -339,6 +340,7 @@ form.addEventListener("submit", async (event) => {
 
     answerText.textContent = data.text;
     currentAnswer = data.text;
+    currentSpokenSummary = data.spoken_summary || data.text;
     confidence.className = `confidence ${data.confidence}`;
     confidence.textContent =
       `${data.confidence.toUpperCase()} CONFIDENCE${data.cached ? " / CACHED" : ""}`;

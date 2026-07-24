@@ -13,6 +13,7 @@ from pal_companion.rag import (
     _extract_map_markers,
     _normalize_output,
     _rerank_local,
+    _split_answer_output,
 )
 from pal_companion.store import VectorStore, cosine_similarity
 from pal_companion.voice import NeuralVoice
@@ -39,12 +40,18 @@ def test_store_returns_closest_document(tmp_path: Path) -> None:
 
 def test_answer_cache_persists_and_index_updates_invalidate_it(tmp_path: Path) -> None:
     store = VectorStore(tmp_path / "index.sqlite3")
-    answer = Answer(text="Coal is here.", confidence="high", sources=[])
+    answer = Answer(
+        text="Coal is here.",
+        spoken_summary="Coal is nearby.",
+        confidence="high",
+        sources=[],
+    )
     store.put_cached_answer("coal", answer)
 
     cached = store.get_cached_answer("coal", max_age_seconds=60)
     assert cached is not None
     assert cached.cached is True
+    assert cached.spoken_summary == "Coal is nearby."
     assert store.cached_answer_count() == 1
 
     document = SourceDocument(source_id="coal", title="Coal", text="New location")
@@ -155,3 +162,28 @@ def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:
         settings=settings,
     )
     assert first == second
+
+
+def test_spoken_summary_is_separated_and_cleaned_for_tts() -> None:
+    answer, summary = _split_answer_output(
+        "Coal Locations\n- Mine coal at (-233, -365). [guide:coal]\n"
+        "SPOKEN_SUMMARY: Head to the Bamboo Groves at (-233, -365). [guide:coal]"
+    )
+
+    assert "SPOKEN_SUMMARY" not in answer
+    assert "[guide:coal]" in answer
+    assert summary == "Head to the Bamboo Groves at (-233, -365)."
+
+
+def test_spoken_summary_falls_back_to_first_useful_points() -> None:
+    _, summary = _split_answer_output(
+        "Best route:\n- Mine the Bamboo Groves first. [guide:coal]\n"
+        "- Bring a heat-resistant outfit. [guide:coal]\n"
+        "- Return with a flying mount. [guide:coal]\n"
+        "- This detail should not be read. [guide:coal]"
+    )
+
+    assert summary == (
+        "Mine the Bamboo Groves first. Bring a heat-resistant outfit. "
+        "Return with a flying mount."
+    )

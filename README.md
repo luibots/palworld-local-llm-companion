@@ -23,8 +23,11 @@ The pilot UI can automatically read answers aloud with selectable Microsoft Edge
 neural voices through `edge-tts`, with no paid voice service or API key. Generated
 MP3 files are cached privately so repeated answers play immediately. Read-aloud can
 be disabled or stopped during generation or playback, including by typing
-`stop talking`. Voice synthesis is an online feature: the spoken answer text is sent
-to Microsoft's voice service, while game data, credentials, and Ollama stay local.
+`stop talking`. The grounded model produces a separate short spoken briefing, so voice
+playback leads with the answer and only the most useful action, location, or warning
+instead of reading citations and exhaustive lists. Voice synthesis is an online
+feature: the spoken briefing is sent to Microsoft's voice service, while game data,
+credentials, and Ollama stay local.
 Answers with map coordinates expose copy controls in a normal browser and local
 Palworld marker controls when opened through the client-only UE4SS overlay.
 

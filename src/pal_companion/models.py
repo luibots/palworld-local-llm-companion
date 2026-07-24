@@ -36,6 +36,7 @@ class MapMarker(BaseModel):
 
 class Answer(BaseModel):
     text: str
+    spoken_summary: str | None = None
     confidence: Literal["high", "medium", "low"]
     sources: list[RetrievedSource]
     coordinates: list[MapMarker] = Field(default_factory=list)
