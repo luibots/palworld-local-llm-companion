@@ -20,6 +20,8 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=1000)
     allow_web: bool = True
     include_live: bool = True
+    player_name: str | None = Field(default=None, max_length=100)
+    player_level: int | None = Field(default=None, ge=1, le=255)
 
 
 class VoiceRequest(BaseModel):

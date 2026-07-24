@@ -33,6 +33,26 @@ local function create_object(class_path, outer)
     return object
 end
 
+local function url_encode(value)
+    return tostring(value):gsub("([^%w%-_%.~])", function(character)
+        return string.format("%%%02X", string.byte(character))
+    end)
+end
+
+local function companion_url(controller)
+    local player_state = controller.PlayerState
+    if not valid(player_state) then
+        return COMPANION_URL
+    end
+    local ok, player_name = pcall(function()
+        return player_state:GetPlayerName()
+    end)
+    if not ok or not player_name or tostring(player_name) == "" then
+        return COMPANION_URL
+    end
+    return COMPANION_URL .. "&player=" .. url_encode(player_name)
+end
+
 local function set_game_input(controller)
     controller.bShowMouseCursor = false
     local input_library = StaticFindObject(
@@ -142,7 +162,8 @@ local function build_overlay()
 
     root_widget.WidgetTree = widget_tree
     widget_tree.RootWidget = canvas
-    browser_widget.InitialURL = COMPANION_URL
+    local url = companion_url(controller)
+    browser_widget.InitialURL = url
     browser_widget.bSupportsTransparency = true
 
     local slot = canvas:AddChildToCanvas(browser_widget)
@@ -154,7 +175,7 @@ local function build_overlay()
     slot:SetAlignment({X = 0.5, Y = 0.5})
 
     root_widget:AddToViewport(9000)
-    browser_widget:LoadURL(COMPANION_URL)
+    browser_widget:LoadURL(url)
     root_widget:SetVisibility(1)
     visible = false
     log("Overlay created")
@@ -179,7 +200,7 @@ local function toggle_overlay()
         visible = not visible
         root_widget:SetVisibility(visible and 0 or 1)
         if visible then
-            browser_widget:LoadURL(COMPANION_URL)
+            browser_widget:LoadURL(companion_url(controller))
             set_ui_input(controller, root_widget)
             log("Overlay opened")
         else

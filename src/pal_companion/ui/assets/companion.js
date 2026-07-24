@@ -9,6 +9,7 @@ const autoRead = document.querySelector("#autoRead");
 const voiceFilter = document.querySelector("#voiceFilter");
 const voiceFilterText = document.querySelector("#voiceFilterText");
 const voiceSelect = document.querySelector("#voiceSelect");
+const playerLevel = document.querySelector("#playerLevel");
 const voiceStatus = document.querySelector("#voiceStatus");
 const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
@@ -30,7 +31,9 @@ const markerStatus = document.querySelector("#markerStatus");
 const sourcesRoot = document.querySelector("#sources");
 const sourceCount = document.querySelector("#sourceCount");
 const history = JSON.parse(localStorage.getItem("pal-companion-history") || "[]");
-const gameClient = new URLSearchParams(window.location.search).get("client") === "ue4ss";
+const queryParams = new URLSearchParams(window.location.search);
+const gameClient = queryParams.get("client") === "ue4ss";
+const playerName = queryParams.get("player")?.trim() || null;
 const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voice)|be\s+quiet|silence|shut\s+up)(?:\s+to\s+me)?[.!]?$/i;
 let currentAnswer = "";
 let currentSpokenSummary = "";
@@ -333,6 +336,8 @@ form.addEventListener("submit", async (event) => {
         question: text,
         allow_web: allowWeb.checked,
         include_live: includeLive.checked,
+        player_name: playerName,
+        player_level: Number(playerLevel.value) || null,
       }),
     });
     const data = await response.json();
@@ -367,6 +372,13 @@ voiceSelect.value = localStorage.getItem("pal-companion-voice") || "emma";
 voiceSelect.addEventListener("change", () => {
   localStorage.setItem("pal-companion-voice", voiceSelect.value);
   stopVoice("NEURAL VOICE READY");
+});
+playerLevel.value =
+  queryParams.get("level") || localStorage.getItem("pal-companion-player-level") || "";
+playerLevel.addEventListener("change", () => {
+  const level = Math.min(255, Math.max(1, Number(playerLevel.value) || 0));
+  playerLevel.value = level || "";
+  localStorage.setItem("pal-companion-player-level", playerLevel.value);
 });
 readButton.addEventListener("click", readAnswer);
 stopVoiceButton.addEventListener("click", () => stopVoice());

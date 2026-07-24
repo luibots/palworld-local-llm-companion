@@ -22,6 +22,15 @@ For location questions, lead with named destinations, map coordinates, node coun
 access conditions, and a short practical route. A generic phrase such as "in caves and
 other places" is not a useful location answer. For item questions, include practical
 acquisition methods, important crafting uses, and base-production options when supplied.
+When current-player level and destination or wild-Pal level ranges are supplied, rank
+level-compatible locations first. State the documented range and label a location
+`OVER YOUR LEVEL` when its minimum level exceeds the current player level. Never infer
+a missing level range or call an unverified location safe; say its level risk is unverified.
+When level-aware route ranking evidence supplies a `BEST MATCH`, lead with that single
+location and its level status before listing at most two alternatives.
+If the ranking says no verified level-compatible location exists, recommend no current
+destination. Present the lowest documented range only as a future target, do not suggest
+higher-level alternatives, and carry that warning into the spoken briefing.
 Use the exact citation form [source_id], never [source_id: value]. Every factual bullet
 must end with at least one citation. Write plain text with short headings and hyphen
 bullets; do not use Markdown emphasis markers.
@@ -38,6 +47,15 @@ log = logging.getLogger(__name__)
 WORD_PATTERN = re.compile(r"[a-z0-9]+")
 COORDINATE_PATTERN = re.compile(r"\(-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?\)")
 COORDINATE_CAPTURE_PATTERN = re.compile(r"\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)")
+LEVEL_LOCATION_PATTERN = re.compile(
+    r"\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)\s+levels\s+(\d+)-(\d+)",
+    flags=re.IGNORECASE,
+)
+CURRENT_LOCATION_PATTERN = re.compile(
+    r"Current player [^:\n]+[^:\n]*:\s*map coordinates\s+"
+    r"(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)",
+    flags=re.IGNORECASE,
+)
 CITATION_PATTERN = re.compile(r"\[([^\]]+)\]")
 STOP_WORDS = {
     "a",
@@ -86,11 +104,15 @@ class Companion:
         *,
         allow_web: bool = True,
         include_live: bool = True,
+        player_name: str | None = None,
+        player_level: int | None = None,
     ) -> Answer:
         cache_key = _answer_cache_key(
             question,
             allow_web=allow_web,
             include_live=include_live,
+            player_name=player_name,
+            player_level=player_level,
             settings=self.settings,
         )
         cached = self.store.get_cached_answer(
@@ -110,6 +132,8 @@ class Companion:
                 question,
                 allow_web=allow_web,
                 include_live=include_live,
+                player_name=player_name,
+                player_level=player_level,
             )
         )
         self._inflight[cache_key] = task
@@ -137,6 +161,8 @@ class Companion:
         *,
         allow_web: bool,
         include_live: bool,
+        player_name: str | None,
+        player_level: int | None,
     ) -> Answer:
         query_embedding = (await self.ollama.embed([question]))[0]
         candidates = self.store.search(
@@ -154,7 +180,12 @@ class Companion:
         sources: list[RetrievedSource] = list(strong_local)
         if include_live:
             try:
-                sources.extend(await self.palworld.live_context())
+                sources.extend(
+                    await self.palworld.live_context(
+                        player_name=player_name,
+                        player_level=player_level,
+                    )
+                )
             except httpx.HTTPError as error:
                 log.warning("live Palworld context unavailable: %s", error)
         if allow_web and (not strong_local or _question_benefits_from_web(question)):
@@ -162,6 +193,9 @@ class Companion:
                 sources.extend(await self.web.search(f"Palworld {question}"))
             except httpx.HTTPError as error:
                 log.warning("web retrieval unavailable: %s", error)
+        level_context = _level_route_context(question, sources, player_level)
+        if level_context:
+            sources.insert(0, level_context)
 
         if not sources:
             if allow_web and not self.settings.brave_search_api_key:
@@ -204,6 +238,8 @@ def _answer_cache_key(
     *,
     allow_web: bool,
     include_live: bool,
+    player_name: str | None = None,
+    player_level: int | None = None,
     settings: Settings,
 ) -> str:
     normalized_question = re.sub(r"\s+", " ", question.strip().casefold())
@@ -215,6 +251,8 @@ def _answer_cache_key(
         "include_live": include_live,
         "web_configured": bool(settings.brave_search_api_key),
         "live_configured": bool(settings.palworld_rest_url and settings.palworld_admin_password),
+        "player_name": (player_name or "").strip().casefold(),
+        "player_level": player_level,
         "chat_model": settings.ollama_chat_model,
         "embed_model": settings.ollama_embed_model,
         "context_length": settings.ollama_context_length,
@@ -270,6 +308,115 @@ def _rerank_local(
         ),
         reverse=True,
     )
+
+
+def _level_route_context(
+    question: str,
+    sources: list[RetrievedSource],
+    player_level: int | None,
+) -> RetrievedSource | None:
+    if player_level is None or not _question_benefits_from_web(question):
+        return None
+
+    question_words = _meaningful_words(question)
+    matching_sources = [
+        source
+        for source in sources
+        if _meaningful_words(source.title)
+        and _meaningful_words(source.title) & question_words
+    ]
+    route_sources = matching_sources or sources
+    candidates: list[tuple[float, float, int, int, RetrievedSource]] = []
+    for source in route_sources:
+        for match in LEVEL_LOCATION_PATTERN.finditer(source.text):
+            candidates.append(
+                (
+                    float(match.group(1)),
+                    float(match.group(2)),
+                    int(match.group(3)),
+                    int(match.group(4)),
+                    source,
+                )
+            )
+
+    if not candidates:
+        return RetrievedSource(
+            source_id="context:level-routing",
+            title="Level-aware route ranking",
+            text=(
+                f"Current player level: {player_level}. No documented level range exists "
+                "for the retrieved locations. Their level risk is unverified; do not call "
+                "them safe or level-compatible."
+            ),
+            kind="live",
+            score=1.0,
+        )
+
+    current_location = _current_map_location(sources)
+    compatible = [candidate for candidate in candidates if candidate[2] <= player_level]
+    has_compatible_location = bool(compatible)
+    pool = compatible or candidates
+    if current_location:
+        best = min(
+            pool,
+            key=lambda candidate: (
+                (candidate[0] - current_location[0]) ** 2
+                + (candidate[1] - current_location[1]) ** 2,
+                abs(((candidate[2] + candidate[3]) / 2) - player_level),
+            ),
+        )
+        selection_reason = (
+            "nearest documented level-compatible coordinate"
+            if has_compatible_location
+            else "nearest documented future target"
+        )
+    else:
+        best = min(
+            pool,
+            key=lambda candidate: (
+                abs(((candidate[2] + candidate[3]) / 2) - player_level),
+                candidate[2],
+            ),
+        )
+        selection_reason = (
+            "closest documented level range"
+            if has_compatible_location
+            else "lowest documented level range"
+        )
+
+    x, y, minimum, maximum, source = best
+    status = "LEVEL MATCH" if has_compatible_location else "OVER YOUR LEVEL"
+    difference = minimum - player_level
+    if difference > 0:
+        warning = (
+            f"No verified level-compatible location exists. The lowest documented "
+            f"minimum is {difference} levels above the player. Treat BEST MATCH only "
+            "as a future target and do not recommend any higher-level alternative."
+        )
+    else:
+        warning = "The documented minimum level does not exceed the player level."
+    return RetrievedSource(
+        source_id="context:level-routing",
+        title="Level-aware route ranking",
+        text=(
+            f"Current player level: {player_level}. BEST MATCH: {source.title} at "
+            f"({x:g}, {y:g}), documented levels {minimum}-{maximum}. Status: {status}. "
+            f"Selection basis: {selection_reason}. {warning} Underlying evidence: "
+            f"[{source.source_id}]."
+        ),
+        kind="live",
+        score=1.0,
+    )
+
+
+def _current_map_location(sources: list[RetrievedSource]) -> tuple[float, float] | None:
+    for source in sources:
+        if source.kind != "live":
+            continue
+        match = CURRENT_LOCATION_PATTERN.search(source.text)
+        if match:
+            return float(match.group(1)), float(match.group(2))
+    return None
 
 
 def _normalize_output(text: str) -> str:

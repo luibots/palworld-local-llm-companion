@@ -60,6 +60,8 @@ async def ask(
             request.question,
             allow_web=request.allow_web,
             include_live=request.include_live,
+            player_name=request.player_name,
+            player_level=request.player_level,
         )
     except Exception as error:
         raise HTTPException(status_code=502, detail=str(error)) from error

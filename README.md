@@ -7,13 +7,20 @@ live server context, and web search for current guides and strategies.
 ## What it answers
 
 - Where a Pal, material, dungeon, or resource can be found
-- Practical routes using in-game map coordinates
+- Practical routes using in-game map coordinates and the current player level
 - Capture, breeding, combat, and base-building strategies
 - Live player positions from a server you administer
 - Questions affected by recent patches, with web links
 
 Every answer carries sources and a confidence level. When retrieval is weak, the
 companion says it lacks evidence rather than inventing coordinates.
+
+For Pal and location questions, the companion ranks documented level ranges against
+the current player. It leads with one `LEVEL MATCH`, or clearly reports
+`OVER YOUR LEVEL` when no verified compatible location exists. The client overlay
+passes the player name for matching against live server context; the `PLAYER LV`
+control provides a local fallback. Locations without level evidence remain explicitly
+unverified rather than being labeled safe.
 
 Repeated questions are served from a persistent SQLite answer cache. Local answers
 remain reusable for seven days, web-backed answers for one hour, and live-server

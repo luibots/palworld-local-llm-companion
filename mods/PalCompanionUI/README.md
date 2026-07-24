@@ -1,7 +1,8 @@
 # Pal Companion UI
 
 Client-only UE4SS Lua prototype. Press `F2` while in a world to open the local
-Pal Companion at `http://127.0.0.1:8765/`.
+Pal Companion at `http://127.0.0.1:8765/`. The overlay passes the local player name
+to the companion so an authorized live-server connection can match level and location.
 
 This mod does not contain Ollama, credentials, game data, or server code. It only
 creates an Unreal UMG browser panel and points it at the loopback companion service.

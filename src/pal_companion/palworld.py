@@ -12,25 +12,44 @@ class PalworldClient:
         self.base_url = base_url.rstrip("/")
         self.auth = httpx.BasicAuth("admin", admin_password) if admin_password else None
 
-    async def live_context(self) -> list[RetrievedSource]:
+    async def live_context(
+        self,
+        player_name: str | None = None,
+        player_level: int | None = None,
+    ) -> list[RetrievedSource]:
         if not self.base_url:
-            return []
+            return _client_player_context(player_name, player_level)
         async with httpx.AsyncClient(timeout=8, auth=self.auth) as client:
             response = await client.get(f"{self.base_url}/v1/api/players")
             response.raise_for_status()
             payload = response.json()
         players = payload.get("players", payload) if isinstance(payload, dict) else payload
+        players = players or []
+        current = _current_player(players, player_name)
         lines: list[str] = []
-        for player in players or []:
+        for player in players:
             name = player.get("name") or player.get("accountName") or "Unknown player"
+            prefix = "Current player" if player is current else "Online player"
+            level = player.get("level")
+            if level is None and player is current:
+                level = player_level
+            level_text = f", level {int(level)}" if level is not None else ", level unavailable"
             x, y = player.get("location_x"), player.get("location_y")
             if x is not None and y is not None:
                 map_x, map_y = world_to_map(float(x), float(y))
-                lines.append(f"{name}: map coordinates {map_x:.0f}, {map_y:.0f}")
+                lines.append(
+                    f"{prefix} {name}{level_text}: map coordinates {map_x:.0f}, {map_y:.0f}"
+                )
             else:
-                lines.append(f"{name}: online, position unavailable")
+                lines.append(f"{prefix} {name}{level_text}: position unavailable")
         if not lines:
             lines.append("No players are currently online.")
+        elif current is None and player_level is not None:
+            lines.insert(
+                0,
+                f"Current player {player_name or 'browser pilot'}: level {player_level}; "
+                "position unavailable.",
+            )
         return [
             RetrievedSource(
                 source_id="live:players",
@@ -40,3 +59,38 @@ class PalworldClient:
                 score=1.0,
             )
         ]
+
+
+def _current_player(
+    players: list[dict],
+    player_name: str | None,
+) -> dict | None:
+    if player_name:
+        expected = player_name.strip().casefold()
+        for player in players:
+            names = (player.get("name"), player.get("accountName"))
+            if any(str(name).strip().casefold() == expected for name in names if name):
+                return player
+    if len(players) == 1:
+        return players[0]
+    return None
+
+
+def _client_player_context(
+    player_name: str | None,
+    player_level: int | None,
+) -> list[RetrievedSource]:
+    if player_level is None:
+        return []
+    return [
+        RetrievedSource(
+            source_id="live:current-player",
+            title="Current player profile",
+            text=(
+                f"Current player {player_name or 'browser pilot'}: level {player_level}; "
+                "position unavailable."
+            ),
+            kind="live",
+            score=1.0,
+        )
+    ]

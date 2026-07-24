@@ -7,10 +7,11 @@ from pal_companion.api import app
 from pal_companion.config import Settings
 from pal_companion.game_data import _clean_text, representative_locations
 from pal_companion.models import Answer, RetrievedSource, SourceDocument
-from pal_companion.palworld import world_to_map
+from pal_companion.palworld import PalworldClient, _current_player, world_to_map
 from pal_companion.rag import (
     _answer_cache_key,
     _extract_map_markers,
+    _level_route_context,
     _normalize_output,
     _rerank_local,
     _split_answer_output,
@@ -162,6 +163,103 @@ def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:
         settings=settings,
     )
     assert first == second
+
+
+def test_answer_cache_separates_player_levels() -> None:
+    settings = Settings()
+    low_level = _answer_cache_key(
+        "Where is Foxcicle?",
+        allow_web=False,
+        include_live=True,
+        player_name="Luis",
+        player_level=12,
+        settings=settings,
+    )
+    high_level = _answer_cache_key(
+        "Where is Foxcicle?",
+        allow_web=False,
+        include_live=True,
+        player_name="Luis",
+        player_level=50,
+        settings=settings,
+    )
+    assert low_level != high_level
+
+
+@pytest.mark.asyncio
+async def test_client_level_becomes_grounded_live_context() -> None:
+    sources = await PalworldClient("", "").live_context(player_name="Luis", player_level=23)
+    assert len(sources) == 1
+    assert sources[0].source_id == "live:current-player"
+    assert "Luis: level 23" in sources[0].text
+
+
+def test_current_player_matches_name_or_only_online_player() -> None:
+    players = [
+        {"name": "Luis", "level": 23},
+        {"name": "Aye", "level": 40},
+    ]
+    assert _current_player(players, "luis") == players[0]
+    assert _current_player([players[1]], None) == players[1]
+
+
+def test_level_route_context_selects_compatible_exact_entity_location() -> None:
+    sources = [
+        RetrievedSource(
+            source_id="game:pal:IceFox",
+            title="Foxcicle",
+            text=(
+                "Representative wild map coordinates: (-423, 495) levels 35-37, "
+                "(244, 65) levels 30-34."
+            ),
+        ),
+        RetrievedSource(
+            source_id="game:pal:Kitsunebi",
+            title="Foxparks",
+            text="Representative wild map coordinates: (10, -441) levels 5-7.",
+        ),
+    ]
+    context = _level_route_context("Where is Foxcicle?", sources, player_level=32)
+    assert context is not None
+    assert "BEST MATCH: Foxcicle at (244, 65)" in context.text
+    assert "Status: LEVEL MATCH" in context.text
+    assert "Foxparks" not in context.text
+
+
+def test_level_route_context_flags_low_level_player() -> None:
+    sources = [
+        RetrievedSource(
+            source_id="game:pal:IceFox",
+            title="Foxcicle",
+            text="Representative wild map coordinates: (244, 65) levels 30-34.",
+        )
+    ]
+    context = _level_route_context("Where is Foxcicle?", sources, player_level=10)
+    assert context is not None
+    assert "Status: OVER YOUR LEVEL" in context.text
+    assert "No verified level-compatible location exists" in context.text
+    assert "20 levels above" in context.text
+    assert "do not recommend any higher-level alternative" in context.text
+
+
+def test_level_route_context_does_not_borrow_unrelated_pal_range() -> None:
+    sources = [
+        RetrievedSource(
+            source_id="guide:coal",
+            title="Coal farming locations",
+            text="Mine coal at (-233, -365).",
+            kind="guide",
+        ),
+        RetrievedSource(
+            source_id="game:pal:Blazamut",
+            title="Blazamut",
+            text="Representative wild map coordinates: (-1981, 1621) levels 80-80.",
+        ),
+    ]
+    context = _level_route_context("Where can I find coal?", sources, player_level=20)
+    assert context is not None
+    assert "level risk is unverified" in context.text
+    assert "80-80" not in context.text
 
 
 def test_spoken_summary_is_separated_and_cleaned_for_tts() -> None:
