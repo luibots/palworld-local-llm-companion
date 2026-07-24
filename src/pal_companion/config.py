@@ -24,3 +24,4 @@ class Settings(BaseSettings):
     answer_cache_ttl_seconds: int = 604800
     answer_cache_web_ttl_seconds: int = 3600
     answer_cache_live_ttl_seconds: int = 15
+    voice_cache_path: Path = Path("data/private/voice-cache")

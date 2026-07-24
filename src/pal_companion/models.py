@@ -22,6 +22,11 @@ class AskRequest(BaseModel):
     include_live: bool = True
 
 
+class VoiceRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=6000)
+    voice: str = "emma"
+
+
 class MapMarker(BaseModel):
     label: str
     x: float

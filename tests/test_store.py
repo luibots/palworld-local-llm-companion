@@ -15,6 +15,7 @@ from pal_companion.rag import (
     _rerank_local,
 )
 from pal_companion.store import VectorStore, cosine_similarity
+from pal_companion.voice import NeuralVoice
 
 
 def test_cosine_similarity() -> None:
@@ -66,6 +67,7 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         health = client.get("/health")
         assert "web_search_configured" in health.json()
         assert "live_context_configured" in health.json()
+        assert health.json()["voice_engine"] == "edge-neural"
 
     with TestClient(app) as client:
         denied = client.post(
@@ -73,6 +75,15 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
             json={"question": "Where is coal?", "allow_web": False, "include_live": False},
         )
         assert denied.status_code == 403
+        denied_voice = client.post("/voice", json={"text": "Hello", "voice": "emma"})
+        assert denied_voice.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_neural_voice_rejects_unknown_alias(tmp_path: Path) -> None:
+    voice = NeuralVoice(tmp_path)
+    with pytest.raises(ValueError, match="Unknown voice"):
+        await voice.synthesize("Hello", "not-a-voice")
 
 
 def test_game_data_text_cleanup_and_location_sampling() -> None:

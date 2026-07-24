@@ -8,6 +8,7 @@ const webFilterText = document.querySelector("#webFilterText");
 const autoRead = document.querySelector("#autoRead");
 const voiceFilter = document.querySelector("#voiceFilter");
 const voiceFilterText = document.querySelector("#voiceFilterText");
+const voiceSelect = document.querySelector("#voiceSelect");
 const voiceStatus = document.querySelector("#voiceStatus");
 const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
@@ -29,11 +30,14 @@ const markerStatus = document.querySelector("#markerStatus");
 const sourcesRoot = document.querySelector("#sources");
 const sourceCount = document.querySelector("#sourceCount");
 const history = JSON.parse(localStorage.getItem("pal-companion-history") || "[]");
-const speechSupported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
 const gameClient = new URLSearchParams(window.location.search).get("client") === "ue4ss";
 const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voice)|be\s+quiet|silence|shut\s+up)(?:\s+to\s+me)?[.!]?$/i;
 let currentAnswer = "";
 let currentMarkers = [];
+let currentAudio = null;
+let currentAudioUrl = null;
+let voiceAbortController = null;
+let neuralVoiceReady = false;
 
 document.body.classList.toggle("game-client", gameClient);
 
@@ -68,12 +72,24 @@ function remember(text) {
 }
 
 function setVoiceState(speaking, message) {
-  stopVoiceButton.disabled = !speechSupported || !speaking;
+  stopVoiceButton.disabled = !speaking;
   voiceStatus.textContent = message;
 }
 
 function stopVoice(message = "VOICE STOPPED") {
-  if (speechSupported) window.speechSynthesis.cancel();
+  if (voiceAbortController) {
+    voiceAbortController.abort();
+    voiceAbortController = null;
+  }
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+  if (currentAudioUrl) {
+    URL.revokeObjectURL(currentAudioUrl);
+    currentAudioUrl = null;
+  }
   setVoiceState(false, message);
 }
 
@@ -87,27 +103,43 @@ function spokenVersion(text) {
     .trim();
 }
 
-function preferredVoice() {
-  const voices = window.speechSynthesis.getVoices();
-  return (
-    voices.find((voice) => voice.lang.startsWith("en") && voice.localService) ||
-    voices.find((voice) => voice.lang.startsWith("en")) ||
-    voices[0]
-  );
-}
+async function readAnswer() {
+  if (!neuralVoiceReady || !currentAnswer) return;
+  stopVoice("GENERATING VOICE");
+  setVoiceState(true, "GENERATING VOICE");
+  const controller = new AbortController();
+  voiceAbortController = controller;
 
-function readAnswer() {
-  if (!speechSupported || !currentAnswer) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(spokenVersion(currentAnswer));
-  const voice = preferredVoice();
-  if (voice) utterance.voice = voice;
-  utterance.rate = 0.95;
-  utterance.pitch = 1.02;
-  utterance.onstart = () => setVoiceState(true, "READING ANSWER");
-  utterance.onend = () => setVoiceState(false, "VOICE READY");
-  utterance.onerror = () => setVoiceState(false, "VOICE ERROR");
-  window.speechSynthesis.speak(utterance);
+  try {
+    const response = await fetch("/voice", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: spokenVersion(currentAnswer),
+        voice: voiceSelect.value,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || `Voice request failed (${response.status})`);
+    }
+    const audioBlob = await response.blob();
+    if (controller.signal.aborted) return;
+    voiceAbortController = null;
+    currentAudioUrl = URL.createObjectURL(audioBlob);
+    const audio = new Audio(currentAudioUrl);
+    currentAudio = audio;
+    audio.addEventListener("play", () => setVoiceState(true, "READING ANSWER"));
+    audio.addEventListener("ended", () => stopVoice("NEURAL VOICE READY"));
+    audio.addEventListener("error", () => stopVoice("VOICE ERROR"));
+    await audio.play();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
+    console.error(error);
+    stopVoice("VOICE ERROR");
+  }
 }
 
 function markerCommand(markers) {
@@ -223,9 +255,22 @@ async function checkHealth() {
     webFilter.title = webConfigured
       ? "Search current Palworld web sources"
       : "Set BRAVE_SEARCH_API_KEY in the local .env file";
+    neuralVoiceReady = data.voice_engine === "edge-neural";
+    autoRead.disabled = !neuralVoiceReady;
+    voiceSelect.disabled = !neuralVoiceReady;
+    readButton.disabled = !neuralVoiceReady;
+    voiceFilterText.textContent = neuralVoiceReady ? "AUTO READ" : "VOICE UNAVAILABLE";
+    if (!voiceAbortController && !currentAudio) {
+      voiceStatus.textContent = neuralVoiceReady ? "NEURAL VOICE READY" : "VOICE UNAVAILABLE";
+    }
   } catch {
     status.classList.add("offline");
     statusText.textContent = "COMPANION OFFLINE";
+    neuralVoiceReady = false;
+    autoRead.disabled = true;
+    voiceSelect.disabled = true;
+    readButton.disabled = true;
+    stopVoice("VOICE OFFLINE");
   }
 }
 
@@ -279,21 +324,16 @@ autoRead.checked = localStorage.getItem("pal-companion-auto-read") !== "false";
 autoRead.addEventListener("change", () => {
   localStorage.setItem("pal-companion-auto-read", String(autoRead.checked));
   if (!autoRead.checked) stopVoice("AUTO READ OFF");
-  else setVoiceState(false, "VOICE READY");
+  else setVoiceState(false, "NEURAL VOICE READY");
+});
+voiceSelect.value = localStorage.getItem("pal-companion-voice") || "emma";
+voiceSelect.addEventListener("change", () => {
+  localStorage.setItem("pal-companion-voice", voiceSelect.value);
+  stopVoice("NEURAL VOICE READY");
 });
 readButton.addEventListener("click", readAnswer);
 stopVoiceButton.addEventListener("click", () => stopVoice());
 placeAllButton.addEventListener("click", () => activateMarkers(currentMarkers));
-
-if (!speechSupported) {
-  autoRead.checked = false;
-  autoRead.disabled = true;
-  readButton.disabled = true;
-  stopVoiceButton.disabled = true;
-  voiceFilter.title = "Speech is unavailable in this browser";
-  voiceFilterText.textContent = "VOICE UNAVAILABLE";
-  voiceStatus.textContent = "VOICE UNAVAILABLE";
-}
 
 renderHistory();
 checkHealth();

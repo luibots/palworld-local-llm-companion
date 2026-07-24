@@ -6,11 +6,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .models import Answer, AskRequest
+from .models import Answer, AskRequest, VoiceRequest
 from .rag import Companion
+from .voice import NeuralVoice
 
 settings = Settings()
 companion = Companion(settings)
+neural_voice = NeuralVoice(settings.voice_cache_path)
 app = FastAPI(title="Palworld Local LLM Companion", version="0.1.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
@@ -37,6 +39,8 @@ async def health() -> dict[str, str | int | bool]:
         "ollama": await companion.ollama.health(),
         "indexed_documents": companion.store.count(),
         "cached_answers": companion.store.cached_answer_count(),
+        "cached_audio": neural_voice.cached_audio_count(),
+        "voice_engine": "edge-neural",
         "web_search_configured": bool(settings.brave_search_api_key),
         "live_context_configured": bool(
             settings.palworld_rest_url and settings.palworld_admin_password
@@ -59,3 +63,19 @@ async def ask(
         )
     except Exception as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
+
+
+@app.post("/voice")
+async def voice(
+    request: VoiceRequest,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> FileResponse:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    try:
+        audio_path = await neural_voice.synthesize(request.text, request.voice)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return FileResponse(audio_path, media_type="audio/mpeg")

@@ -19,11 +19,14 @@ Repeated questions are served from a persistent SQLite answer cache. Local answe
 remain reusable for seven days, web-backed answers for one hour, and live-server
 answers for 15 seconds. Re-indexing game data clears cached answers automatically.
 
-The pilot UI can automatically read answers aloud with the browser or operating
-system's built-in voice, with no paid voice service or API key. Read-aloud can be
-disabled or stopped immediately, including by typing `stop talking`. Answers with
-map coordinates expose copy controls in a normal browser and local Palworld marker
-controls when opened through the client-only UE4SS overlay.
+The pilot UI can automatically read answers aloud with selectable Microsoft Edge
+neural voices through `edge-tts`, with no paid voice service or API key. Generated
+MP3 files are cached privately so repeated answers play immediately. Read-aloud can
+be disabled or stopped during generation or playback, including by typing
+`stop talking`. Voice synthesis is an online feature: the spoken answer text is sent
+to Microsoft's voice service, while game data, credentials, and Ollama stay local.
+Answers with map coordinates expose copy controls in a normal browser and local
+Palworld marker controls when opened through the client-only UE4SS overlay.
 
 ## Surfaces
 
@@ -188,6 +191,7 @@ resource-node extraction and Workshop packaging remain future work.
 - [Ollama API](https://docs.ollama.com/api/introduction)
 - [Brave Search API](https://api-dashboard.search.brave.com/api-reference/web/search/get)
 - [Discord application commands](https://docs.discord.com/developers/docs/interactions/slash-commands)
+- [edge-tts](https://github.com/rany2/edge-tts)
 
 ## License
 
