@@ -19,6 +19,7 @@ __pycache__/
 venv/
 dist/
 build/
+wheel-check/
 *.egg-info/
 
 data/index/

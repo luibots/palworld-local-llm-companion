@@ -20,7 +20,7 @@ companion says it lacks evidence rather than inventing coordinates.
 - `pal-companion ask "Where can I get coal?"`
 - Local HTTP `POST /ask` for PAL COMMAND and overlays
 - Discord `/askpal`
-- Future non-invasive desktop overlay; no game-process injection is required
+- In-game `F2` Paldeck overlay through the client-only UE4SS UI prototype
 
 ## Architecture
 
@@ -68,6 +68,29 @@ Run the API:
 pal-companion api
 ```
 
+Open `http://127.0.0.1:8765/` for the Paldeck interface. The API issues a
+same-origin session cookie to that UI; `/ask` rejects requests without it.
+
+## In-game Paldeck prototype
+
+The UI prototype is client-only. It does not require a server mod or server restart.
+
+1. Subscribe to
+   [UE4SS Experimental (Palworld)](https://steamcommunity.com/workshop/filedetails/?id=3625223587)
+   in Steam Workshop.
+2. Launch Palworld, enable UE4SS in the in-game Mod Manager, then close Palworld.
+3. Install the UI script:
+
+   ```powershell
+   .\scripts\Install-ClientMod.ps1
+   ```
+
+4. Start the companion locally with `pal-companion api`.
+5. Launch Palworld, enter a world, and press `F2`.
+
+Do not install a second manual UE4SS copy alongside the Workshop version. The installer
+refuses to modify Palworld until the official `Mods\NativeMods\UE4SS` path exists.
+
 ```http
 POST http://127.0.0.1:8765/ask
 Content-Type: application/json
@@ -96,7 +119,8 @@ schemas, and tiny clearly labeled examples instead.
 ## Integration boundaries
 
 - Live Palworld calls are read-only.
-- The companion does not inject into or patch the game process.
+- The optional UI mod uses UE4SS to create a UMG browser panel; Ollama and
+  credentials remain in the separate local process.
 - Credentials stay in `.env`, which Git ignores.
 - Web claims remain labeled and linked; they do not silently override game-table data.
 - Server and player information must not be submitted to public issue reports.
@@ -104,8 +128,9 @@ schemas, and tiny clearly labeled examples instead.
 ## Status
 
 The first vertical slice is implemented: Ollama chat/embeddings, SQLite vector retrieval,
-live player coordinates, Brave search, FastAPI, Discord, CLI, and unit tests. Next work is
-a robust game-table extraction pipeline and a polished PAL COMMAND companion panel.
+live player coordinates, Brave search, FastAPI, Discord, CLI, unit tests, and an in-game
+UE4SS Paldeck prototype. Next work is a robust game-table extraction pipeline and
+Workshop packaging.
 
 ## References
 

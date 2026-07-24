@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pal Companion</title>
+    <link rel="stylesheet" href="/assets/companion.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">P</span>
+          <div>
+            <h1>PAL COMPANION</h1>
+            <p>LOCAL INTELLIGENCE DECK</p>
+          </div>
+        </div>
+        <div class="status" id="status">
+          <span class="status-dot"></span>
+          <span id="statusText">CONNECTING</span>
+        </div>
+      </header>
+
+      <section class="search-band">
+        <form id="askForm">
+          <label for="question">ASK ABOUT PALS, MATERIALS, LOCATIONS OR STRATEGY</label>
+          <div class="search-row">
+            <input
+              id="question"
+              name="question"
+              autocomplete="off"
+              maxlength="1000"
+              placeholder="Where can I find coal near my current location?"
+              autofocus
+            />
+            <button id="askButton" type="submit">ASK</button>
+          </div>
+        </form>
+        <div class="filters">
+          <label><input id="includeLive" type="checkbox" checked /> LIVE SERVER</label>
+          <label><input id="allowWeb" type="checkbox" checked /> WEB GUIDES</label>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="history-pane">
+          <div class="section-label">RECENT</div>
+          <div id="history" class="history"></div>
+        </aside>
+
+        <article class="answer-pane" aria-live="polite">
+          <div id="emptyState" class="empty-state">
+            <span class="empty-glyph" aria-hidden="true">?</span>
+            <h2>READY TO SEARCH</h2>
+          </div>
+
+          <div id="loadingState" class="loading-state" hidden>
+            <div class="scan-line"></div>
+            <strong>SEARCHING VERIFIED SOURCES</strong>
+          </div>
+
+          <div id="answerState" hidden>
+            <div class="answer-head">
+              <span class="section-label">ANSWER</span>
+              <span class="confidence" id="confidence">LOW CONFIDENCE</span>
+            </div>
+            <div id="answerText" class="answer-text"></div>
+            <div class="source-head">
+              <span class="section-label">SOURCES</span>
+              <span id="sourceCount">0</span>
+            </div>
+            <div id="sources" class="sources"></div>
+          </div>
+
+          <div id="errorState" class="error-state" hidden>
+            <strong>COMPANION UNAVAILABLE</strong>
+            <p id="errorText"></p>
+          </div>
+        </article>
+      </section>
+
+      <footer>
+        <span>F2 CLOSE</span>
+        <span>FACTS FROM DATA. STRATEGY FROM AI.</span>
+        <span id="indexCount">0 SOURCES INDEXED</span>
+      </footer>
+    </main>
+    <script src="/assets/companion.js"></script>
+  </body>
+</html>
