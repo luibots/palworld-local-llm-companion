@@ -36,6 +36,7 @@ async def health() -> dict[str, str | int | bool]:
         "status": "ok",
         "ollama": await companion.ollama.health(),
         "indexed_documents": companion.store.count(),
+        "cached_answers": companion.store.cached_answer_count(),
         "web_search_configured": bool(settings.brave_search_api_key),
         "live_context_configured": bool(
             settings.palworld_rest_url and settings.palworld_admin_password

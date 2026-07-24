@@ -214,7 +214,8 @@ async function checkHealth() {
     const ready = response.ok && data.ollama;
     status.classList.toggle("offline", !ready);
     statusText.textContent = ready ? "OLLAMA READY" : "OLLAMA OFFLINE";
-    indexCount.textContent = `${data.indexed_documents || 0} SOURCES INDEXED`;
+    indexCount.textContent =
+      `${data.indexed_documents || 0} SOURCES / ${data.cached_answers || 0} CACHED`;
     const webConfigured = Boolean(data.web_search_configured);
     allowWeb.disabled = !webConfigured;
     if (!webConfigured) allowWeb.checked = false;
@@ -259,7 +260,8 @@ form.addEventListener("submit", async (event) => {
     answerText.textContent = data.text;
     currentAnswer = data.text;
     confidence.className = `confidence ${data.confidence}`;
-    confidence.textContent = `${data.confidence.toUpperCase()} CONFIDENCE`;
+    confidence.textContent =
+      `${data.confidence.toUpperCase()} CONFIDENCE${data.cached ? " / CACHED" : ""}`;
     renderMarkers(data.coordinates || []);
     renderSources(data.sources || []);
     remember(text);

@@ -34,3 +34,4 @@ class Answer(BaseModel):
     confidence: Literal["high", "medium", "low"]
     sources: list[RetrievedSource]
     coordinates: list[MapMarker] = Field(default_factory=list)
+    cached: bool = False

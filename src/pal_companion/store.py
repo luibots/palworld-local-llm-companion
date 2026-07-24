@@ -1,9 +1,10 @@
 import json
 import math
 import sqlite3
+import time
 from pathlib import Path
 
-from .models import RetrievedSource, SourceDocument
+from .models import Answer, RetrievedSource, SourceDocument
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -32,6 +33,15 @@ class VectorStore:
                     kind TEXT NOT NULL,
                     metadata TEXT NOT NULL,
                     embedding TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS answer_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    answer TEXT NOT NULL,
+                    created_at REAL NOT NULL
                 )
                 """
             )
@@ -70,6 +80,8 @@ class VectorStore:
                 """,
                 rows,
             )
+            if rows:
+                connection.execute("DELETE FROM answer_cache")
         return len(rows)
 
     def search(self, query_embedding: list[float], limit: int = 6) -> list[RetrievedSource]:
@@ -95,6 +107,39 @@ class VectorStore:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
 
+    def get_cached_answer(self, cache_key: str, max_age_seconds: int) -> Answer | None:
+        cutoff = time.time() - max_age_seconds
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT answer
+                FROM answer_cache
+                WHERE cache_key = ? AND created_at >= ?
+                """,
+                (cache_key, cutoff),
+            ).fetchone()
+        if not row:
+            return None
+        return Answer.model_validate_json(row[0]).model_copy(update={"cached": True})
+
+    def put_cached_answer(self, cache_key: str, answer: Answer) -> None:
+        stored = answer.model_copy(update={"cached": False})
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO answer_cache (cache_key, answer, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET
+                    answer=excluded.answer,
+                    created_at=excluded.created_at
+                """,
+                (cache_key, stored.model_dump_json(), time.time()),
+            )
+
+    def cached_answer_count(self) -> int:
+        with self._connect() as connection:
+            return int(connection.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0])
+
     def delete_stale_prefix(self, prefix: str, current_source_ids: set[str]) -> int:
         with self._connect() as connection:
             existing = {
@@ -106,4 +151,6 @@ class VectorStore:
             }
             stale = [(source_id,) for source_id in existing - current_source_ids]
             connection.executemany("DELETE FROM documents WHERE source_id = ?", stale)
+            if stale:
+                connection.execute("DELETE FROM answer_cache")
         return len(stale)

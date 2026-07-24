@@ -15,6 +15,10 @@ live server context, and web search for current guides and strategies.
 Every answer carries sources and a confidence level. When retrieval is weak, the
 companion says it lacks evidence rather than inventing coordinates.
 
+Repeated questions are served from a persistent SQLite answer cache. Local answers
+remain reusable for seven days, web-backed answers for one hour, and live-server
+answers for 15 seconds. Re-indexing game data clears cached answers automatically.
+
 The pilot UI can automatically read answers aloud with the browser or operating
 system's built-in voice, with no paid voice service or API key. Read-aloud can be
 disabled or stopped immediately, including by typing `stop talking`. Answers with

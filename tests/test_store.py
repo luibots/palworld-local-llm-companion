@@ -4,10 +4,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pal_companion.api import app
+from pal_companion.config import Settings
 from pal_companion.game_data import _clean_text, representative_locations
-from pal_companion.models import RetrievedSource, SourceDocument
+from pal_companion.models import Answer, RetrievedSource, SourceDocument
 from pal_companion.palworld import world_to_map
-from pal_companion.rag import _extract_map_markers, _normalize_output, _rerank_local
+from pal_companion.rag import (
+    _answer_cache_key,
+    _extract_map_markers,
+    _normalize_output,
+    _rerank_local,
+)
 from pal_companion.store import VectorStore, cosine_similarity
 
 
@@ -28,6 +34,22 @@ def test_store_returns_closest_document(tmp_path: Path) -> None:
     deleted = store.delete_stale_prefix("p", {"pal-current"})
     assert deleted == 1
     assert store.count() == 1
+
+
+def test_answer_cache_persists_and_index_updates_invalidate_it(tmp_path: Path) -> None:
+    store = VectorStore(tmp_path / "index.sqlite3")
+    answer = Answer(text="Coal is here.", confidence="high", sources=[])
+    store.put_cached_answer("coal", answer)
+
+    cached = store.get_cached_answer("coal", max_age_seconds=60)
+    assert cached is not None
+    assert cached.cached is True
+    assert store.cached_answer_count() == 1
+
+    document = SourceDocument(source_id="coal", title="Coal", text="New location")
+    store.upsert([document], [[1.0, 0.0]])
+    assert store.get_cached_answer("coal", max_age_seconds=60) is None
+    assert store.cached_answer_count() == 0
 
 
 def test_world_coordinates_match_pal_command_calibration() -> None:
@@ -105,3 +127,20 @@ def test_answer_coordinates_become_structured_map_markers() -> None:
     ]
     assert markers[0].label == "Mount Obsidian"
     assert markers[0].source_id == "guide:coal"
+
+
+def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:
+    settings = Settings()
+    first = _answer_cache_key(
+        "  Where   IS coal? ",
+        allow_web=False,
+        include_live=False,
+        settings=settings,
+    )
+    second = _answer_cache_key(
+        "where is coal",
+        allow_web=False,
+        include_live=False,
+        settings=settings,
+    )
+    assert first == second
