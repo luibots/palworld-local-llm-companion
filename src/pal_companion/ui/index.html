@@ -38,14 +38,26 @@
           </div>
         </form>
         <div class="filters">
-          <label><input id="includeLive" type="checkbox" checked /> LIVE SERVER</label>
-          <label id="webFilter">
-            <input id="allowWeb" type="checkbox" checked />
-            <span id="webFilterText">WEB GUIDES</span>
+          <label class="mode-toggle">
+            <input id="includeLive" type="checkbox" checked />
+            <span class="toggle-shell">
+              <span class="toggle-light" aria-hidden="true"></span>
+              <span>SERVER LINK</span>
+            </span>
           </label>
-          <label id="voiceFilter">
+          <label id="webFilter" class="mode-toggle">
+            <input id="allowWeb" type="checkbox" checked />
+            <span class="toggle-shell">
+              <span class="toggle-light" aria-hidden="true"></span>
+              <span id="webFilterText">NETWORK LINK</span>
+            </span>
+          </label>
+          <label id="voiceFilter" class="mode-toggle">
             <input id="autoRead" type="checkbox" checked />
-            <span id="voiceFilterText">AUTO READ</span>
+            <span class="toggle-shell">
+              <span class="toggle-light" aria-hidden="true"></span>
+              <span id="voiceFilterText">VOICE RELAY</span>
+            </span>
           </label>
           <label class="voice-picker" for="voiceSelect">
             VOICE

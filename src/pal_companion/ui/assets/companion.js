@@ -41,6 +41,29 @@ let neuralVoiceReady = false;
 
 document.body.classList.toggle("game-client", gameClient);
 
+function historyAppearance(text) {
+  const value = text.toLowerCase();
+  if (/(foxicle|ice|frost|snow|chillet|pengullet)/.test(value)) {
+    return { kind: "ice", glyph: "*", label: "Ice" };
+  }
+  if (/(fire|flame|blazamut|jormuntide ignis|kindling)/.test(value)) {
+    return { kind: "fire", glyph: "^", label: "Fire" };
+  }
+  if (/(coal|ore|stone|sulfur|quartz|paldium|ingot|oil|wood|fiber)/.test(value)) {
+    return { kind: "resource", glyph: "◆", label: "Resource" };
+  }
+  if (/(where|location|coordinate|map|dungeon|cave)/.test(value)) {
+    return { kind: "location", glyph: "+", label: "Location" };
+  }
+  if (/(pal|breed|capture|drop|partner|boss)/.test(value)) {
+    return { kind: "pal", glyph: "P", label: "Pal" };
+  }
+  if (/(best|strategy|build|armor|weapon|base)/.test(value)) {
+    return { kind: "strategy", glyph: "!", label: "Strategy" };
+  }
+  return { kind: "general", glyph: "?", label: "General" };
+}
+
 function show(target) {
   [emptyState, loadingState, answerState, errorState].forEach((item) => {
     item.hidden = item !== target;
@@ -51,13 +74,25 @@ function renderHistory() {
   historyRoot.replaceChildren();
   history.slice(0, 8).forEach((text) => {
     const button = document.createElement("button");
+    const appearance = historyAppearance(text);
     button.type = "button";
-    button.textContent = text;
     button.title = text;
+
+    const icon = document.createElement("span");
+    icon.className = `history-icon ${appearance.kind}`;
+    icon.textContent = appearance.glyph;
+    icon.title = appearance.label;
+    icon.setAttribute("aria-hidden", "true");
+
+    const label = document.createElement("span");
+    label.className = "history-text";
+    label.textContent = text;
+
     button.addEventListener("click", () => {
       question.value = text;
       question.focus();
     });
+    button.append(icon, label);
     historyRoot.append(button);
   });
 }
@@ -251,7 +286,7 @@ async function checkHealth() {
     const webConfigured = Boolean(data.web_search_configured);
     allowWeb.disabled = !webConfigured;
     if (!webConfigured) allowWeb.checked = false;
-    webFilterText.textContent = webConfigured ? "WEB GUIDES" : "WEB NOT CONFIGURED";
+    webFilterText.textContent = webConfigured ? "NETWORK LINK" : "NETWORK OFFLINE";
     webFilter.title = webConfigured
       ? "Search current Palworld web sources"
       : "Set BRAVE_SEARCH_API_KEY in the local .env file";
@@ -259,7 +294,7 @@ async function checkHealth() {
     autoRead.disabled = !neuralVoiceReady;
     voiceSelect.disabled = !neuralVoiceReady;
     readButton.disabled = !neuralVoiceReady;
-    voiceFilterText.textContent = neuralVoiceReady ? "AUTO READ" : "VOICE UNAVAILABLE";
+    voiceFilterText.textContent = neuralVoiceReady ? "VOICE RELAY" : "VOICE OFFLINE";
     if (!voiceAbortController && !currentAudio) {
       voiceStatus.textContent = neuralVoiceReady ? "NEURAL VOICE READY" : "VOICE UNAVAILABLE";
     }
