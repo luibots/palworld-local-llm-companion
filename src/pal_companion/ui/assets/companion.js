@@ -513,7 +513,7 @@ async function checkHealth() {
       ? "Search current Palworld web sources"
       : "Set BRAVE_SEARCH_API_KEY in the local .env file";
     neuralVoiceReady = data.voice_engine === "edge-neural";
-    localSpeechReady = data.speech_engine === "local-whisper";
+    localSpeechReady = data.speech_engine === "windows-sapi-grammar";
     autoRead.disabled = !neuralVoiceReady;
     voiceSelect.disabled = !neuralVoiceReady;
     readButton.disabled = !neuralVoiceReady;

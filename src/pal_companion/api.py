@@ -14,7 +14,7 @@ from .voice import NeuralVoice
 settings = Settings()
 companion = Companion(settings)
 neural_voice = NeuralVoice(settings.voice_cache_path)
-confirmation_transcriber = ConfirmationTranscriber(settings.speech_model)
+confirmation_transcriber = ConfirmationTranscriber()
 app = FastAPI(title="Palworld Local LLM Companion", version="0.1.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
@@ -43,7 +43,7 @@ async def health() -> dict[str, str | int | bool]:
         "cached_answers": companion.store.cached_answer_count(),
         "cached_audio": neural_voice.cached_audio_count(),
         "voice_engine": "edge-neural",
-        "speech_engine": "local-whisper",
+        "speech_engine": "windows-sapi-grammar",
         "web_search_configured": bool(settings.brave_search_api_key),
         "live_context_configured": bool(
             settings.palworld_rest_url and settings.palworld_admin_password

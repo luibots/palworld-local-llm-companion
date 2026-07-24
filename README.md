@@ -44,9 +44,9 @@ using the confirmation button) places them with a matching native marker categor
 Enable `MIC CONFIRM` once to listen for a spoken yes/no only while that confirmation
 is visible. Palworld acknowledges successful placement before the bundled marker
 chime plays.
-The local companion records the default Windows microphone, so the embedded game
-browser does not need microphone permission. Clips stay on the PC and are transcribed
-by the small English Whisper model, which downloads once and then runs from local cache.
+The local companion uses Windows' constrained speech grammar with the default
+microphone, so the embedded game browser does not need microphone permission or a
+speech AI model. It only recognizes the approved yes/no confirmation phrases.
 
 ## Surfaces
 
@@ -90,7 +90,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 
-ollama pull qwen2.5:14b
+ollama pull qwen2.5:3b
 ollama pull embeddinggemma
 
 Copy-Item .env.example .env
@@ -103,6 +103,10 @@ Run the API:
 ```powershell
 pal-companion api
 ```
+
+The default 3B model, 4096-token context, and 30-second keep-alive are tuned to
+run beside Palworld on a 10 GB GPU. Larger models and long keep-alives can consume
+most available VRAM and cause severe in-game frame-time spikes.
 
 Open `http://127.0.0.1:8765/` for the Paldeck interface. The API issues a
 same-origin session cookie to that UI; `/ask` rejects requests without it.

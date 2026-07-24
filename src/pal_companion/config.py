@@ -7,10 +7,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     ollama_url: str = "http://localhost:11434"
-    ollama_chat_model: str = "qwen2.5:14b"
+    ollama_chat_model: str = "qwen2.5:3b"
     ollama_embed_model: str = "embeddinggemma"
-    ollama_context_length: int = 8192
-    ollama_keep_alive: str = "30m"
+    ollama_context_length: int = 4096
+    ollama_keep_alive: str = "30s"
+    ollama_embed_keep_alive: str = "30s"
 
     palworld_rest_url: str = ""
     palworld_admin_password: str = ""
@@ -25,4 +26,3 @@ class Settings(BaseSettings):
     answer_cache_web_ttl_seconds: int = 3600
     answer_cache_live_ttl_seconds: int = 15
     voice_cache_path: Path = Path("data/private/voice-cache")
-    speech_model: str = "openai/whisper-tiny.en"

@@ -89,6 +89,7 @@ class Companion:
             settings.ollama_embed_model,
             context_length=settings.ollama_context_length,
             keep_alive=settings.ollama_keep_alive,
+            embed_keep_alive=settings.ollama_embed_keep_alive,
         )
         self.store = VectorStore(settings.index_path)
         self.palworld = PalworldClient(

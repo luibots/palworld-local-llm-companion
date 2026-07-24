@@ -77,7 +77,7 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert "web_search_configured" in health.json()
         assert "live_context_configured" in health.json()
         assert health.json()["voice_engine"] == "edge-neural"
-        assert health.json()["speech_engine"] == "local-whisper"
+        assert health.json()["speech_engine"] == "windows-sapi-grammar"
 
     with TestClient(app) as client:
         denied = client.post(
@@ -217,20 +217,16 @@ def test_confirmation_transcript_is_normalized() -> None:
     assert _normalize_transcript("  [ Yes,   place them. ] ") == "Yes, place them."
 
 
-def test_confirmation_wav_decoder_resamples_to_16khz() -> None:
-    import io
+def test_confirmation_helper_is_packaged() -> None:
+    assert ConfirmationTranscriber().script_path.is_file()
 
-    import numpy as np
-    import soundfile as sf
 
-    source = np.zeros(8000, dtype=np.float32)
-    wav = io.BytesIO()
-    sf.write(wav, source, 8000, format="WAV")
-
-    audio, sample_rate = ConfirmationTranscriber._decode_wav(wav.getvalue())
-
-    assert sample_rate == 16000
-    assert len(audio) == 16000
+def test_default_runtime_profile_leaves_resources_for_the_game() -> None:
+    settings = Settings()
+    assert settings.ollama_chat_model == "qwen2.5:3b"
+    assert settings.ollama_context_length == 4096
+    assert settings.ollama_keep_alive == "30s"
+    assert settings.ollama_embed_keep_alive == "30s"
 
 
 def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:

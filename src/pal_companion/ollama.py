@@ -8,14 +8,16 @@ class OllamaClient:
         chat_model: str,
         embed_model: str,
         *,
-        context_length: int = 8192,
-        keep_alive: str = "30m",
+        context_length: int = 4096,
+        keep_alive: str = "30s",
+        embed_keep_alive: str = "30s",
     ):
         self.base_url = base_url.rstrip("/")
         self.chat_model = chat_model
         self.embed_model = embed_model
         self.context_length = context_length
         self.keep_alive = keep_alive
+        self.embed_keep_alive = embed_keep_alive
 
     async def embed(self, inputs: list[str]) -> list[list[float]]:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -24,7 +26,7 @@ class OllamaClient:
                 json={
                     "model": self.embed_model,
                     "input": inputs,
-                    "keep_alive": "5m",
+                    "keep_alive": self.embed_keep_alive,
                 },
             )
             response.raise_for_status()
