@@ -35,6 +35,8 @@ const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voic
 let currentAnswer = "";
 let currentMarkers = [];
 
+document.body.classList.toggle("game-client", gameClient);
+
 function show(target) {
   [emptyState, loadingState, answerState, errorState].forEach((item) => {
     item.hidden = item !== target;
