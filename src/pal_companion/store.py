@@ -94,3 +94,16 @@ class VectorStore:
     def count(self) -> int:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
+
+    def delete_stale_prefix(self, prefix: str, current_source_ids: set[str]) -> int:
+        with self._connect() as connection:
+            existing = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT source_id FROM documents WHERE source_id LIKE ?",
+                    (f"{prefix}%",),
+                )
+            }
+            stale = [(source_id,) for source_id in existing - current_source_ids]
+            connection.executemany("DELETE FROM documents WHERE source_id = ?", stale)
+        return len(stale)

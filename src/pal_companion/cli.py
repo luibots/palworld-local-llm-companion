@@ -6,6 +6,7 @@ import uvicorn
 
 from .config import Settings
 from .discord_bot import run_discord
+from .game_data import build_game_documents, write_jsonl
 from .ingest import ingest_jsonl
 from .rag import Companion
 
@@ -16,6 +17,18 @@ def parser() -> argparse.ArgumentParser:
 
     ingest = commands.add_parser("ingest", help="Index a JSONL game-data export")
     ingest.add_argument("path", type=Path)
+    ingest.add_argument(
+        "--replace-prefix",
+        help="Remove stale indexed documents sharing this source ID prefix",
+    )
+
+    game_data = commands.add_parser(
+        "game-data",
+        help="Build private JSONL documents from converted local Palworld tables",
+    )
+    game_data.add_argument("--tables-dir", type=Path, required=True)
+    game_data.add_argument("--output", type=Path, required=True)
+    game_data.add_argument("--game-build", default="unknown")
 
     ask = commands.add_parser("ask", help="Ask from the terminal")
     ask.add_argument("question")
@@ -33,8 +46,19 @@ def parser() -> argparse.ArgumentParser:
 async def _run_async(args: argparse.Namespace, settings: Settings) -> None:
     companion = Companion(settings)
     if args.command == "ingest":
-        count = await ingest_jsonl(args.path, companion.store, companion.ollama)
+        count = await ingest_jsonl(
+            args.path,
+            companion.store,
+            companion.ollama,
+            replace_prefix=args.replace_prefix,
+        )
         print(f"Indexed {count} documents.")
+    elif args.command == "game-data":
+        count = write_jsonl(
+            build_game_documents(args.tables_dir, args.game_build),
+            args.output,
+        )
+        print(f"Wrote {count} private game-data documents.")
     elif args.command == "ask":
         answer = await companion.ask(
             args.question,

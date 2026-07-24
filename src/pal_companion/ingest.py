@@ -17,9 +17,28 @@ def read_jsonl(path: Path) -> list[SourceDocument]:
     return documents
 
 
-async def ingest_jsonl(path: Path, store: VectorStore, ollama: OllamaClient) -> int:
+async def ingest_jsonl(
+    path: Path,
+    store: VectorStore,
+    ollama: OllamaClient,
+    batch_size: int = 64,
+    replace_prefix: str | None = None,
+) -> int:
     documents = read_jsonl(path)
-    embeddings = await ollama.embed(
-        [f"{document.title}\n{document.text}" for document in documents]
-    )
-    return store.upsert(documents, embeddings)
+    if replace_prefix and any(
+        not document.source_id.startswith(replace_prefix) for document in documents
+    ):
+        raise ValueError(f"all source IDs must start with replacement prefix {replace_prefix!r}")
+    indexed = 0
+    for start in range(0, len(documents), batch_size):
+        batch = documents[start : start + batch_size]
+        embeddings = await ollama.embed(
+            [f"{document.title}\n{document.text}" for document in batch]
+        )
+        indexed += store.upsert(batch, embeddings)
+    if replace_prefix:
+        store.delete_stale_prefix(
+            replace_prefix,
+            {document.source_id for document in documents},
+        )
+    return indexed

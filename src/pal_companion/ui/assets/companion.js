@@ -3,6 +3,8 @@ const question = document.querySelector("#question");
 const askButton = document.querySelector("#askButton");
 const includeLive = document.querySelector("#includeLive");
 const allowWeb = document.querySelector("#allowWeb");
+const webFilter = document.querySelector("#webFilter");
+const webFilterText = document.querySelector("#webFilterText");
 const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
 const indexCount = document.querySelector("#indexCount");
@@ -83,6 +85,13 @@ async function checkHealth() {
     status.classList.toggle("offline", !ready);
     statusText.textContent = ready ? "OLLAMA READY" : "OLLAMA OFFLINE";
     indexCount.textContent = `${data.indexed_documents || 0} SOURCES INDEXED`;
+    const webConfigured = Boolean(data.web_search_configured);
+    allowWeb.disabled = !webConfigured;
+    if (!webConfigured) allowWeb.checked = false;
+    webFilterText.textContent = webConfigured ? "WEB GUIDES" : "WEB NOT CONFIGURED";
+    webFilter.title = webConfigured
+      ? "Search current Palworld web sources"
+      : "Set BRAVE_SEARCH_API_KEY in the local .env file";
   } catch {
     status.classList.add("offline");
     statusText.textContent = "COMPANION OFFLINE";

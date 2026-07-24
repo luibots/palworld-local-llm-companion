@@ -62,8 +62,17 @@ class Companion:
                 log.warning("web retrieval unavailable: %s", error)
 
         if not sources:
+            if allow_web and not self.settings.brave_search_api_key:
+                missing = (
+                    "No matching local evidence was found. Online search is not configured; "
+                    "set BRAVE_SEARCH_API_KEY in the local .env file and restart the companion."
+                )
+            elif allow_web:
+                missing = "No matching local or online evidence was found for that question."
+            else:
+                missing = "No matching indexed or live evidence was found for that question."
             return Answer(
-                text="I do not have enough indexed or live evidence to answer that yet.",
+                text=missing,
                 confidence="low",
                 sources=[],
             )

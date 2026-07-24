@@ -74,6 +74,38 @@ pal-companion api
 Open `http://127.0.0.1:8765/` for the Paldeck interface. The API issues a
 same-origin session cookie to that UI; `/ask` rejects requests without it.
 
+### Index the installed game
+
+On Windows, the local importer extracts selected Palworld data tables using the
+PAL COMMAND toolchain, converts them to private JSON, and indexes the resulting
+Pal, item, recipe, drop, and spawn facts:
+
+```powershell
+.\scripts\Import-LocalGameData.ps1
+```
+
+By default, the script looks for `repak.exe`, `UAssetGUI.exe`, and `Mappings.usmap`
+under `..\pal-command\tools`. Use `-ToolsDir C:\path\to\tools` when that checkout
+is elsewhere.
+
+The importer reads the Steam build ID and writes generated files only beneath
+`data/private/` and `data/index/`. Both locations are ignored by Git. Run it again
+after a Palworld update to rebuild the local evidence from the installed game.
+
+### Enable current web results
+
+Ollama does not browse by itself. The companion performs a Brave Search first,
+passes the returned snippets and URLs to Ollama as evidence, and displays those
+links with the answer. Create a local `.env` from `.env.example`, then set:
+
+```dotenv
+BRAVE_SEARCH_API_KEY=your_subscription_token
+```
+
+Restart `pal-companion api` after changing `.env`. Keep this token in `.env`; do
+not paste it into chat or commit it. The UI reports `WEB NOT CONFIGURED` until the
+token is available.
+
 ## In-game Paldeck prototype
 
 The UI prototype is client-only. It does not require a server mod or server restart.
@@ -132,8 +164,9 @@ schemas, and tiny clearly labeled examples instead.
 
 The first vertical slice is implemented: Ollama chat/embeddings, SQLite vector retrieval,
 live player coordinates, Brave search, FastAPI, Discord, CLI, unit tests, and an in-game
-UE4SS Paldeck prototype. Next work is a robust game-table extraction pipeline and
-Workshop packaging.
+UE4SS Paldeck prototype. The Windows importer builds a private index from installed
+Palworld Pal, item, recipe, drop, and wild-spawn tables. Exact resource-node extraction
+and Workshop packaging remain future work.
 
 ## References
 
