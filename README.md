@@ -41,6 +41,12 @@ The always-available `MAP TARGET` control also accepts an exact X/Y pair and pla
 a native custom marker, avoiding manual map panning.
 In the in-game overlay, coordinate answers ask for confirmation. Saying `yes` (or
 using the confirmation button) places them with a matching native marker category.
+Enable `MIC CONFIRM` once to listen for a spoken yes/no only while that confirmation
+is visible. Palworld acknowledges successful placement before the bundled marker
+chime plays.
+The local companion records the default Windows microphone, so the embedded game
+browser does not need microphone permission. Clips stay on the PC and are transcribed
+by the small English Whisper model, which downloads once and then runs from local cache.
 
 ## Surfaces
 

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from pal_companion.api import app
+from pal_companion.api import app, confirmation_transcriber
 from pal_companion.config import Settings
 from pal_companion.game_data import _clean_text, representative_locations
 from pal_companion.models import Answer, RetrievedSource, SourceDocument
@@ -17,6 +17,7 @@ from pal_companion.rag import (
     _split_answer_output,
 )
 from pal_companion.store import VectorStore, cosine_similarity
+from pal_companion.transcription import ConfirmationTranscriber, _normalize_transcript
 from pal_companion.voice import NeuralVoice
 
 
@@ -76,6 +77,7 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert "web_search_configured" in health.json()
         assert "live_context_configured" in health.json()
         assert health.json()["voice_engine"] == "edge-neural"
+        assert health.json()["speech_engine"] == "local-whisper"
 
     with TestClient(app) as client:
         denied = client.post(
@@ -85,6 +87,48 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert denied.status_code == 403
         denied_voice = client.post("/voice", json={"text": "Hello", "voice": "emma"})
         assert denied_voice.status_code == 403
+        denied_transcription = client.post(
+            "/transcribe-confirmation",
+            content=b"not audio",
+            headers={"Content-Type": "audio/wav"},
+        )
+        assert denied_transcription.status_code == 403
+        denied_listen = client.post("/listen-confirmation")
+        assert denied_listen.status_code == 403
+
+
+def test_confirmation_transcription_endpoint_is_session_protected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def transcribe(_: bytes) -> str:
+        return "Yes, place them."
+
+    monkeypatch.setattr(confirmation_transcriber, "transcribe", transcribe)
+    with TestClient(app) as client:
+        client.get("/")
+        response = client.post(
+            "/transcribe-confirmation",
+            content=b"test wav",
+            headers={"Content-Type": "audio/wav"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"transcript": "Yes, place them."}
+
+
+def test_confirmation_listen_endpoint_uses_system_microphone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def listen() -> str:
+        return "No."
+
+    monkeypatch.setattr(confirmation_transcriber, "listen", listen)
+    with TestClient(app) as client:
+        client.get("/")
+        response = client.post("/listen-confirmation")
+
+    assert response.status_code == 200
+    assert response.json() == {"transcript": "No."}
 
 
 @pytest.mark.asyncio
@@ -167,6 +211,26 @@ def test_ambiguous_marker_inherits_answer_subject_icon() -> None:
     )
 
     assert [marker.icon for marker in markers] == ["resource", "resource"]
+
+
+def test_confirmation_transcript_is_normalized() -> None:
+    assert _normalize_transcript("  [ Yes,   place them. ] ") == "Yes, place them."
+
+
+def test_confirmation_wav_decoder_resamples_to_16khz() -> None:
+    import io
+
+    import numpy as np
+    import soundfile as sf
+
+    source = np.zeros(8000, dtype=np.float32)
+    wav = io.BytesIO()
+    sf.write(wav, source, 8000, format="WAV")
+
+    audio, sample_rate = ConfirmationTranscriber._decode_wav(wav.getvalue())
+
+    assert sample_rate == 16000
+    assert len(audio) == 16000
 
 
 def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:

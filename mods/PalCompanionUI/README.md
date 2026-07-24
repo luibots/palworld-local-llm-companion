@@ -11,6 +11,9 @@ Location answers expose structured coordinates, and the in-game panel can pass u
 12 of them to Palworld's local custom map-marker system after the player confirms.
 Resource, Pal, boss, dungeon, egg, base, food, and person results use the closest
 native Palworld marker icon. Neither feature contacts or changes the dedicated server.
+Optional microphone confirmation uses the companion process and default Windows
+microphone only while a marker question is visible. The bundled chime plays after
+the Lua bridge acknowledges successful placement.
 
 The current script is a development prototype targeting Palworld Steam build
 `24181527`. It must be tested against the current UE4SS experimental Palworld fork

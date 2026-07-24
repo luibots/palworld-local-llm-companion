@@ -8,6 +8,9 @@ const webFilterText = document.querySelector("#webFilterText");
 const autoRead = document.querySelector("#autoRead");
 const voiceFilter = document.querySelector("#voiceFilter");
 const voiceFilterText = document.querySelector("#voiceFilterText");
+const micFilter = document.querySelector("#micFilter");
+const micConfirm = document.querySelector("#micConfirm");
+const micFilterText = document.querySelector("#micFilterText");
 const voiceSelect = document.querySelector("#voiceSelect");
 const playerLevel = document.querySelector("#playerLevel");
 const targetX = document.querySelector("#targetX");
@@ -45,6 +48,7 @@ const playerName = queryParams.get("player")?.trim() || null;
 const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voice)|be\s+quiet|silence|shut\s+up)(?:\s+to\s+me)?[.!]?$/i;
 const confirmMarkerPattern = /^(?:yes|yeah|yep|sure|okay|ok|do it|place (?:it|them)|put (?:it|them)(?: on (?:the|my) map)?|mark (?:it|them))[\s.!]*$/i;
 const declineMarkerPattern = /^(?:no|nope|not now|cancel|don't|do not)[\s.!]*$/i;
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const markerIcons = {
   pin: { type: 0, glyph: "+", label: "Pinpoint" },
   star: { type: 1, glyph: "*", label: "Star" },
@@ -69,6 +73,12 @@ let currentAudio = null;
 let currentAudioUrl = null;
 let voiceAbortController = null;
 let neuralVoiceReady = false;
+let markerRecognition = null;
+let markerListening = false;
+let markerListenAbortController = null;
+let localSpeechReady = false;
+const markerChime = new Audio("/assets/marker-chime.mp3");
+markerChime.preload = "auto";
 
 document.body.classList.toggle("game-client", gameClient);
 
@@ -159,6 +169,119 @@ function stopVoice(message = "VOICE STOPPED") {
   setVoiceState(false, message);
 }
 
+function stopMarkerListening() {
+  if (markerRecognition && markerListening) {
+    markerRecognition.abort();
+  }
+  if (markerListenAbortController) {
+    markerListenAbortController.abort();
+    markerListenAbortController = null;
+  }
+  markerListening = false;
+  micFilterText.textContent = micConfirm.checked ? "MIC CONFIRM" : "MIC OFF";
+}
+
+function finishSpokenMarkerReply(transcript) {
+  if (confirmMarkerPattern.test(transcript)) {
+    finishMarkerPrompt(true);
+    return;
+  }
+  if (declineMarkerPattern.test(transcript)) {
+    finishMarkerPrompt(false);
+    return;
+  }
+  setMarkerStatus(`HEARD "${transcript.toUpperCase()}": SAY YES OR NO`);
+}
+
+function createMarkerRecognition() {
+  if (!SpeechRecognition || markerRecognition) return markerRecognition;
+  markerRecognition = new SpeechRecognition();
+  markerRecognition.continuous = false;
+  markerRecognition.interimResults = false;
+  markerRecognition.lang = "en-US";
+  markerRecognition.addEventListener("start", () => {
+    markerListening = true;
+    micFilterText.textContent = "MIC LISTENING";
+    setMarkerStatus("LISTENING FOR YES OR NO");
+  });
+  markerRecognition.addEventListener("result", (event) => {
+    const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
+    if (transcript) finishSpokenMarkerReply(transcript);
+  });
+  markerRecognition.addEventListener("error", (event) => {
+    if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      micConfirm.checked = false;
+      localStorage.setItem("pal-companion-mic-confirm", "false");
+      setMarkerStatus("MICROPHONE PERMISSION REQUIRED");
+    } else if (event.error !== "aborted" && event.error !== "no-speech") {
+      setMarkerStatus("MIC CONFIRMATION UNAVAILABLE");
+    }
+  });
+  markerRecognition.addEventListener("end", () => {
+    markerListening = false;
+    micFilterText.textContent = micConfirm.checked ? "MIC CONFIRM" : "MIC OFF";
+  });
+  return markerRecognition;
+}
+
+async function listenForLocalMarkerReply() {
+  markerListening = true;
+  const controller = new AbortController();
+  markerListenAbortController = controller;
+  micFilterText.textContent = "MIC LISTENING";
+  setMarkerStatus("LISTENING FOR YES OR NO");
+
+  try {
+    const response = await fetch("/listen-confirmation", {
+      method: "POST",
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted) return;
+    markerListening = false;
+    micFilterText.textContent = "MIC THINKING";
+    setMarkerStatus("TRANSCRIBING LOCALLY");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || `Transcription failed (${response.status})`);
+    }
+    const transcript = String(data.transcript || "").trim();
+    if (transcript) finishSpokenMarkerReply(transcript);
+    else setMarkerStatus("NO SPEECH HEARD: SAY YES OR NO");
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      console.error(error);
+      setMarkerStatus("LOCAL MIC CONFIRMATION FAILED");
+    }
+  } finally {
+    markerListenAbortController = null;
+    markerListening = false;
+    micFilterText.textContent = micConfirm.checked ? "MIC CONFIRM" : "MIC OFF";
+  }
+}
+
+function startMarkerListening() {
+  if (!gameClient || !pendingMarkers.length || !micConfirm.checked || markerListening) return;
+  if (voiceAbortController || currentAudio) return;
+  if (localSpeechReady) {
+    listenForLocalMarkerReply();
+    return;
+  }
+  const recognition = createMarkerRecognition();
+  if (recognition) {
+    try {
+      recognition.start();
+    } catch {
+      setMarkerStatus("MIC CONFIRMATION IS ALREADY STARTING");
+    }
+    return;
+  }
+  micConfirm.checked = false;
+  micConfirm.disabled = true;
+  micFilterText.textContent = "MIC UNSUPPORTED";
+  setMarkerStatus("LOCAL SPEECH MODEL IS UNAVAILABLE");
+}
+
 function spokenVersion(text) {
   return text
     .replace(/\[[^\]]+\]/g, "")
@@ -198,7 +321,10 @@ async function readAnswer() {
     const audio = new Audio(currentAudioUrl);
     currentAudio = audio;
     audio.addEventListener("play", () => setVoiceState(true, "READING BRIEF"));
-    audio.addEventListener("ended", () => stopVoice("NEURAL VOICE READY"));
+    audio.addEventListener("ended", () => {
+      stopVoice("NEURAL VOICE READY");
+      startMarkerListening();
+    });
     audio.addEventListener("error", () => stopVoice("VOICE ERROR"));
     await audio.play();
   } catch (error) {
@@ -220,6 +346,20 @@ function markerCommand(markers) {
     `${markers.length} MARKER${markers.length === 1 ? "" : "S"} REQUESTED IN GAME`
   );
 }
+
+function playMarkerChime() {
+  markerChime.currentTime = 0;
+  markerChime.play().catch(() => {
+    setMarkerStatus("MARKERS PLACED / CHIME BLOCKED");
+  });
+}
+
+window.palCompanionMarkerPlaced = (count) => {
+  const placed = Math.max(0, Number(count) || 0);
+  if (!placed) return;
+  setMarkerStatus(`${placed} MARKER${placed === 1 ? "" : "S"} PLACED`);
+  playMarkerChime();
+};
 
 function setMarkerStatus(message) {
   markerStatus.textContent = message;
@@ -258,6 +398,7 @@ function activateMarkers(markers) {
 
 function finishMarkerPrompt(accepted) {
   if (!pendingMarkers.length) return;
+  stopMarkerListening();
   const markers = pendingMarkers;
   pendingMarkers = [];
   markerPrompt.hidden = true;
@@ -372,6 +513,7 @@ async function checkHealth() {
       ? "Search current Palworld web sources"
       : "Set BRAVE_SEARCH_API_KEY in the local .env file";
     neuralVoiceReady = data.voice_engine === "edge-neural";
+    localSpeechReady = data.speech_engine === "local-whisper";
     autoRead.disabled = !neuralVoiceReady;
     voiceSelect.disabled = !neuralVoiceReady;
     readButton.disabled = !neuralVoiceReady;
@@ -409,6 +551,7 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  stopMarkerListening();
   stopVoice("VOICE READY");
   askButton.disabled = true;
   show(loadingState);
@@ -444,6 +587,7 @@ form.addEventListener("submit", async (event) => {
     remember(text);
     show(answerState);
     if (autoRead.checked) readAnswer();
+    else startMarkerListening();
   } catch (error) {
     errorText.textContent = error instanceof Error ? error.message : String(error);
     show(errorState);
@@ -457,6 +601,22 @@ autoRead.addEventListener("change", () => {
   localStorage.setItem("pal-companion-auto-read", String(autoRead.checked));
   if (!autoRead.checked) stopVoice("AUTO READ OFF");
   else setVoiceState(false, "NEURAL VOICE READY");
+});
+micConfirm.checked =
+  gameClient && localStorage.getItem("pal-companion-mic-confirm") === "true";
+micConfirm.disabled = !gameClient;
+micFilter.title = gameClient
+  ? "Listen for yes or no while a map confirmation is visible"
+  : "Microphone confirmation is available in the in-game client";
+micFilterText.textContent = micConfirm.disabled
+  ? "MIC IN-GAME"
+  : micConfirm.checked
+    ? "MIC CONFIRM"
+    : "MIC OFF";
+micConfirm.addEventListener("change", () => {
+  localStorage.setItem("pal-companion-mic-confirm", String(micConfirm.checked));
+  if (micConfirm.checked) startMarkerListening();
+  else stopMarkerListening();
 });
 voiceSelect.value = localStorage.getItem("pal-companion-voice") || "emma";
 voiceSelect.addEventListener("change", () => {

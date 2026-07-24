@@ -116,6 +116,22 @@ local function add_map_marker(map_x, map_y, icon_type)
     ))
 end
 
+local function acknowledge_marker_placement(count)
+    if count < 1 or not valid(browser_widget) then
+        return
+    end
+    local script = string.format(
+        "window.palCompanionMarkerPlaced && window.palCompanionMarkerPlaced(%d);",
+        count
+    )
+    local ok, message = pcall(function()
+        browser_widget:ExecuteJavascript(script)
+    end)
+    if not ok then
+        log("Could not acknowledge marker placement: " .. tostring(message))
+    end
+end
+
 local function process_marker_command(command)
     local payload = command:match("^[^;]+;(.+)$")
     if not payload then
@@ -146,6 +162,7 @@ local function process_marker_command(command)
     end
 
     ExecuteInGameThread(function()
+        local placed = 0
         for _, coordinate in ipairs(coordinates) do
             local ok, message = pcall(
                 add_map_marker,
@@ -153,10 +170,13 @@ local function process_marker_command(command)
                 coordinate.y,
                 coordinate.icon_type
             )
-            if not ok then
+            if ok then
+                placed = placed + 1
+            else
                 log("Map marker failed: " .. tostring(message))
             end
         end
+        acknowledge_marker_placement(placed)
     end)
 end
 

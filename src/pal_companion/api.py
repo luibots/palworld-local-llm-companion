@@ -1,18 +1,20 @@
 import secrets
 from pathlib import Path
 
-from fastapi import Cookie, FastAPI, HTTPException
+from fastapi import Cookie, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
 from .models import Answer, AskRequest, VoiceRequest
 from .rag import Companion
+from .transcription import ConfirmationTranscriber
 from .voice import NeuralVoice
 
 settings = Settings()
 companion = Companion(settings)
 neural_voice = NeuralVoice(settings.voice_cache_path)
+confirmation_transcriber = ConfirmationTranscriber(settings.speech_model)
 app = FastAPI(title="Palworld Local LLM Companion", version="0.1.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
@@ -41,6 +43,7 @@ async def health() -> dict[str, str | int | bool]:
         "cached_answers": companion.store.cached_answer_count(),
         "cached_audio": neural_voice.cached_audio_count(),
         "voice_engine": "edge-neural",
+        "speech_engine": "local-whisper",
         "web_search_configured": bool(settings.brave_search_api_key),
         "live_context_configured": bool(
             settings.palworld_rest_url and settings.palworld_admin_password
@@ -81,3 +84,37 @@ async def voice(
     except Exception as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
     return FileResponse(audio_path, media_type="audio/mpeg")
+
+
+@app.post("/transcribe-confirmation")
+async def transcribe_confirmation(
+    request: Request,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> dict[str, str]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    if request.headers.get("content-type", "").split(";")[0] != "audio/wav":
+        raise HTTPException(status_code=415, detail="A WAV microphone recording is required.")
+    wav_bytes = await request.body()
+    if len(wav_bytes) > 2_000_000:
+        raise HTTPException(status_code=413, detail="The microphone recording is too large.")
+    try:
+        transcript = await confirmation_transcriber.transcribe(wav_bytes)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"transcript": transcript}
+
+
+@app.post("/listen-confirmation")
+async def listen_confirmation(
+    pal_companion_session: str | None = Cookie(default=None),
+) -> dict[str, str]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    try:
+        transcript = await confirmation_transcriber.listen()
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    return {"transcript": transcript}
