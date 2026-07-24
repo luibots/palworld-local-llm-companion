@@ -78,7 +78,7 @@ same-origin session cookie to that UI; `/ask` rejects requests without it.
 
 On Windows, the local importer extracts selected Palworld data tables using the
 PAL COMMAND toolchain, converts them to private JSON, and indexes the resulting
-Pal, item, recipe, drop, and spawn facts:
+Pal, item, recipe, drop, spawn, build-object, and technology facts:
 
 ```powershell
 .\scripts\Import-LocalGameData.ps1
@@ -90,7 +90,10 @@ is elsewhere.
 
 The importer reads the Steam build ID and writes generated files only beneath
 `data/private/` and `data/index/`. Both locations are ignored by Git. Run it again
-after a Palworld update to rebuild the local evidence from the installed game.
+after a Palworld update to rebuild the local evidence from the installed game. It
+also indexes the small, attributed coordinate guides in `data/guides/`; these fill
+route-planning gaps where static resource-node placements are not yet extracted
+from the packaged world levels.
 
 ### Enable current web results
 
@@ -165,8 +168,9 @@ schemas, and tiny clearly labeled examples instead.
 The first vertical slice is implemented: Ollama chat/embeddings, SQLite vector retrieval,
 live player coordinates, Brave search, FastAPI, Discord, CLI, unit tests, and an in-game
 UE4SS Paldeck prototype. The Windows importer builds a private index from installed
-Palworld Pal, item, recipe, drop, and wild-spawn tables. Exact resource-node extraction
-and Workshop packaging remain future work.
+Palworld Pal, item, recipe, drop, wild-spawn, build-object, and technology tables.
+Attributed 1.0 route guides provide precise resource coordinates while direct static
+resource-node extraction and Workshop packaging remain future work.
 
 ## References
 

@@ -45,21 +45,29 @@ def _value(fields: dict[str, dict[str, Any]], name: str, default: Any = None) ->
 def _clean_text(value: str | None) -> str:
     if not value:
         return ""
-    value = re.sub(r"<itemName id=\|([^|]+)\|/>", r"\1", value)
+    value = re.sub(r"<(?:itemName|mapObjectName) id=\|([^|]+)\|/>", r"\1", value)
     value = re.sub(r"<[^>]+>", " ", value)
     return " ".join(value.replace("\r", " ").replace("\n", " ").split())
 
 
-def _text_map(path: Path) -> dict[str, str]:
+def _raw_text_map(path: Path) -> dict[str, str]:
     result: dict[str, str] = {}
     for row in _rows(path):
         text_property = _fields(row).get("TextData")
         if not text_property:
             continue
-        text = _clean_text(text_property.get("CultureInvariantString"))
+        text = text_property.get("CultureInvariantString")
         if text:
             result[row["Name"]] = text
     return result
+
+
+def _text_map(path: Path) -> dict[str, str]:
+    return {
+        key: cleaned
+        for key, value in _raw_text_map(path).items()
+        if (cleaned := _clean_text(value))
+    }
 
 
 def _location(fields: dict[str, dict[str, Any]]) -> tuple[float, float] | None:
@@ -108,20 +116,158 @@ def representative_locations(
 
 def _item_maps(
     tables_dir: Path,
-) -> tuple[dict[str, str], dict[str, str], dict[str, list[dict[str, Any]]]]:
+) -> tuple[
+    dict[str, str],
+    dict[str, str],
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[tuple[str, int, int]]],
+]:
     names = _text_map(tables_dir / "DT_ItemNameText_Common.json")
     descriptions = _text_map(tables_dir / "DT_ItemDescriptionText_Common.json")
     recipes: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    used_in: dict[str, list[tuple[str, int, int]]] = defaultdict(list)
     for row in _rows(tables_dir / "DT_ItemRecipeDataTable.json"):
         fields = _fields(row)
         product_id = _value(fields, "Product_Id")
         if product_id:
             recipes[str(product_id)].append(fields)
-    return names, descriptions, recipes
+            product_count = int(_value(fields, "Product_Count", 1))
+            for index in range(1, 11):
+                material_id = _value(fields, f"Material{index}_Id")
+                material_count = int(_value(fields, f"Material{index}_Count", 0))
+                if material_id and material_count:
+                    used_in[str(material_id)].append(
+                        (str(product_id), product_count, material_count)
+                    )
+    return names, descriptions, recipes, used_in
 
 
 def _item_name(item_names: dict[str, str], item_id: str) -> str:
     return item_names.get(f"ITEM_NAME_{item_id}", item_id)
+
+
+def _resolve_markup(
+    text: str,
+    item_names: dict[str, str],
+    map_object_names: dict[str, str],
+) -> str:
+    text = re.sub(
+        r"<itemName id=\|([^|]+)\|/>",
+        lambda match: _item_name(item_names, match.group(1)),
+        text,
+    )
+    text = re.sub(
+        r"<mapObjectName id=\|([^|]+)\|/>",
+        lambda match: map_object_names.get(
+            f"MAPOBJECT_NAME_{match.group(1)}",
+            match.group(1),
+        ),
+        text,
+    )
+    return _clean_text(text)
+
+
+def _array_values(fields: dict[str, dict[str, Any]], name: str) -> list[str]:
+    values = _value(fields, name, [])
+    if not isinstance(values, list):
+        return []
+    return [
+        str(item["Value"])
+        for item in values
+        if isinstance(item, dict) and item.get("Value")
+    ]
+
+
+def _build_documents(
+    tables_dir: Path,
+    item_names: dict[str, str],
+    game_build: str,
+) -> tuple[list[SourceDocument], dict[str, list[str]]]:
+    map_object_names = _text_map(tables_dir / "DT_MapObjectNameText_Common.json")
+    descriptions = _raw_text_map(tables_dir / "DT_BuildObjectDescText_Common.json")
+    technologies: dict[str, dict[str, dict[str, Any]]] = {}
+    for row in _rows(tables_dir / "DT_TechnologyRecipeUnlock.json"):
+        fields = _fields(row)
+        for build_id in _array_values(fields, "UnlockBuildObjects"):
+            technologies[build_id] = fields
+
+    documents: list[SourceDocument] = []
+    produced_by: dict[str, list[str]] = defaultdict(list)
+    for row in _rows(tables_dir / "DT_BuildObjectDataTable.json"):
+        fields = _fields(row)
+        build_id = str(_value(fields, "MapObjectId", row["Name"]))
+        display_name = map_object_names.get(f"MAPOBJECT_NAME_{build_id}")
+        if not display_name:
+            continue
+
+        materials = [
+            (
+                str(material_id),
+                int(_value(fields, f"Material{index}_Count", 0)),
+            )
+            for index in range(1, 10)
+            if (material_id := _value(fields, f"Material{index}_Id"))
+        ]
+        material_text = ", ".join(
+            f"{count} {_item_name(item_names, item_id)}"
+            for item_id, count in materials
+            if count
+        )
+        raw_description = descriptions.get(f"BUILDOBJECT_DESC_{build_id}", "")
+        description = _resolve_markup(raw_description, item_names, map_object_names)
+        lines = [
+            f"{display_name} is a buildable Palworld structure.",
+            f"Internal build ID: {build_id}.",
+            (
+                f"Build category: {_value(fields, 'TypeA', 'Unknown')} / "
+                f"{_value(fields, 'TypeB', 'Unknown')}."
+            ),
+        ]
+        if description:
+            lines.append(f"Description: {description}")
+        if material_text:
+            lines.append(f"Required build materials: {material_text}.")
+        work_amount = int(float(_value(fields, "RequiredBuildWorkAmount", 0)))
+        if work_amount:
+            lines.append(f"Required build work: {work_amount}.")
+
+        technology = technologies.get(build_id)
+        if technology:
+            level = int(_value(technology, "LevelCap", 0))
+            cost = int(_value(technology, "Cost", 0))
+            lines.append(f"Technology unlock: player level {level}; point cost {cost}.")
+            if _value(technology, "IsBossTechnology", False):
+                lines.append("Technology type: special or Ancient Technology.")
+            required_boss = str(_value(technology, "RequireDefeatTowerBoss", "None"))
+            if required_boss != "None":
+                lines.append(f"Required defeated tower boss: {required_boss}.")
+
+        summary = (
+            f"{display_name}"
+            + (
+                f" (level {int(_value(technology, 'LevelCap', 0))}; "
+                f"build materials: {material_text})"
+                if technology and material_text
+                else ""
+            )
+        )
+        for item_id in set(re.findall(r"<itemName id=\|([^|]+)\|/>", raw_description)):
+            produced_by[item_id].append(summary)
+
+        documents.append(
+            SourceDocument(
+                source_id=f"game:build:{build_id}",
+                title=display_name,
+                text="\n".join(lines),
+                kind="game-data",
+                metadata={
+                    "game_build": game_build,
+                    "internal_id": build_id,
+                    "table": "DT_BuildObjectDataTable",
+                },
+            )
+        )
+    return documents, produced_by
 
 
 def _drop_maps(
@@ -280,6 +426,8 @@ def _item_documents(
     item_names: dict[str, str],
     item_descriptions: dict[str, str],
     recipes: dict[str, list[dict[str, Any]]],
+    used_in: dict[str, list[tuple[str, int, int]]],
+    produced_by: dict[str, list[str]],
     drops_by_item: dict[str, set[str]],
     pal_names: dict[str, str],
     game_build: str,
@@ -329,6 +477,26 @@ def _item_documents(
                     f"work amount {int(_value(recipe, 'WorkAmount', 0))}."
                 )
 
+        used_in_text = []
+        seen_uses: set[tuple[str, int, int]] = set()
+        for product_id, product_count, material_count in used_in.get(item_id, []):
+            use = (
+                _item_name(item_names, product_id),
+                product_count,
+                material_count,
+            )
+            if use in seen_uses:
+                continue
+            seen_uses.add(use)
+            used_in_text.append(
+                f"{product_count} {use[0]} uses {material_count} {display_name}"
+            )
+        if used_in_text:
+            lines.append(f"Used to craft: {'; '.join(used_in_text[:20])}.")
+
+        if produced_by.get(item_id):
+            lines.append(f"Base production: {'; '.join(produced_by[item_id])}.")
+
         dropped_by = sorted(
             pal_names[pal_id]
             for pal_id in drops_by_item.get(item_id, set())
@@ -354,9 +522,10 @@ def _item_documents(
 
 
 def build_game_documents(tables_dir: Path, game_build: str = "unknown") -> list[SourceDocument]:
-    item_names, item_descriptions, recipes = _item_maps(tables_dir)
+    item_names, item_descriptions, recipes, used_in = _item_maps(tables_dir)
     drops_by_pal, drops_by_item = _drop_maps(tables_dir)
     locations = _spawn_locations(tables_dir)
+    builds, produced_by = _build_documents(tables_dir, item_names, game_build)
     pals, pal_names = _pal_documents(
         tables_dir,
         item_names,
@@ -369,11 +538,13 @@ def build_game_documents(tables_dir: Path, game_build: str = "unknown") -> list[
         item_names,
         item_descriptions,
         recipes,
+        used_in,
+        produced_by,
         drops_by_item,
         pal_names,
         game_build,
     )
-    return sorted([*pals, *items], key=lambda document: document.source_id)
+    return sorted([*pals, *items, *builds], key=lambda document: document.source_id)
 
 
 def write_jsonl(documents: list[SourceDocument], output: Path) -> int:

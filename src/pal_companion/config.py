@@ -17,5 +17,5 @@ class Settings(BaseSettings):
     discord_guild_id: int | None = None
 
     index_path: Path = Path("data/index/companion.sqlite3")
-    retrieval_limit: int = 6
+    retrieval_limit: int = 4
     retrieval_min_score: float = 0.35

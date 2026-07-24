@@ -40,7 +40,11 @@ $assets = @(
   'Pal/Content/Pal/DataTable/Item/DT_ItemRecipeDataTable',
   'Pal/Content/Pal/DataTable/Character/DT_PalDropItem',
   'Pal/Content/Pal/DataTable/Spawner/DT_PalWildSpawner',
-  'Pal/Content/Pal/DataTable/Spawner/DT_PalSpawnerPlacement'
+  'Pal/Content/Pal/DataTable/Spawner/DT_PalSpawnerPlacement',
+  'Pal/Content/Pal/DataTable/MapObject/Building/DT_BuildObjectDataTable',
+  'Pal/Content/Pal/DataTable/Technology/DT_TechnologyRecipeUnlock',
+  'Pal/Content/L10N/en/Pal/DataTable/Text/DT_MapObjectNameText_Common',
+  'Pal/Content/L10N/en/Pal/DataTable/Text/DT_BuildObjectDescText_Common'
 )
 
 $unpackArguments = @('unpack', '-q', '-f', '-o', $extractRoot)
@@ -88,6 +92,13 @@ try {
     & $python -m pal_companion.cli ingest $jsonl --replace-prefix 'game:'
     if ($LASTEXITCODE -ne 0) {
       throw 'Ollama indexing failed.'
+    }
+    $guides = Join-Path $root 'data\guides\curated.jsonl'
+    if (Test-Path $guides) {
+      & $python -m pal_companion.cli ingest $guides --replace-prefix 'guide:'
+      if ($LASTEXITCODE -ne 0) {
+        throw 'Curated guide indexing failed.'
+      }
     }
   }
 }

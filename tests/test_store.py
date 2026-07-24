@@ -5,8 +5,9 @@ from fastapi.testclient import TestClient
 
 from pal_companion.api import app
 from pal_companion.game_data import _clean_text, representative_locations
-from pal_companion.models import SourceDocument
+from pal_companion.models import RetrievedSource, SourceDocument
 from pal_companion.palworld import world_to_map
+from pal_companion.rag import _normalize_output, _rerank_local
 from pal_companion.store import VectorStore, cosine_similarity
 
 
@@ -59,3 +60,26 @@ def test_game_data_text_cleanup_and_location_sampling() -> None:
     selected = representative_locations(locations, limit=4)
     assert len(selected) == 4
     assert len(set(selected)) == 4
+
+
+def test_location_reranking_prefers_exact_coordinate_guide() -> None:
+    sources = [
+        RetrievedSource(
+            source_id="game:item:Coal",
+            title="Coal",
+            text="A generic item description without a route.",
+            score=0.8,
+        ),
+        RetrievedSource(
+            source_id="guide:coal",
+            title="Coal farming locations",
+            text="Mine five nodes at (-233, -365).",
+            kind="guide",
+            score=0.5,
+        ),
+    ]
+    ranked = _rerank_local("Where can I find coal?", sources)
+    assert ranked[0].source_id == "guide:coal"
+    assert _normalize_output("**Coal** [source_id: game:item:Coal]") == (
+        "Coal [game:item:Coal]"
+    )
