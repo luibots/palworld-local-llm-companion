@@ -15,6 +15,12 @@ live server context, and web search for current guides and strategies.
 Every answer carries sources and a confidence level. When retrieval is weak, the
 companion says it lacks evidence rather than inventing coordinates.
 
+The pilot UI can automatically read answers aloud with the browser or operating
+system's built-in voice, with no paid voice service or API key. Read-aloud can be
+disabled or stopped immediately, including by typing `stop talking`. Answers with
+map coordinates expose copy controls in a normal browser and local Palworld marker
+controls when opened through the client-only UE4SS overlay.
+
 ## Surfaces
 
 - `pal-companion ask "Where can I get coal?"`

@@ -22,7 +22,15 @@ class AskRequest(BaseModel):
     include_live: bool = True
 
 
+class MapMarker(BaseModel):
+    label: str
+    x: float
+    y: float
+    source_id: str | None = None
+
+
 class Answer(BaseModel):
     text: str
     confidence: Literal["high", "medium", "low"]
     sources: list[RetrievedSource]
+    coordinates: list[MapMarker] = Field(default_factory=list)

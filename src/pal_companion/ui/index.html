@@ -43,6 +43,11 @@
             <input id="allowWeb" type="checkbox" checked />
             <span id="webFilterText">WEB GUIDES</span>
           </label>
+          <label id="voiceFilter">
+            <input id="autoRead" type="checkbox" checked />
+            <span id="voiceFilterText">AUTO READ</span>
+          </label>
+          <span id="voiceStatus" class="voice-status">VOICE READY</span>
         </div>
       </section>
 
@@ -66,9 +71,25 @@
           <div id="answerState" hidden>
             <div class="answer-head">
               <span class="section-label">ANSWER</span>
-              <span class="confidence" id="confidence">LOW CONFIDENCE</span>
+              <div class="answer-tools">
+                <button id="readButton" class="tool-button" type="button">READ</button>
+                <button id="stopVoiceButton" class="tool-button" type="button" disabled>
+                  STOP
+                </button>
+                <span class="confidence" id="confidence">LOW CONFIDENCE</span>
+              </div>
             </div>
             <div id="answerText" class="answer-text"></div>
+            <section id="markerSection" class="marker-section" hidden>
+              <div class="marker-head">
+                <span class="section-label">MAP MARKERS</span>
+                <button id="placeAllButton" class="tool-button" type="button">
+                  PLACE ALL
+                </button>
+              </div>
+              <div id="markers" class="markers"></div>
+              <p id="markerStatus" class="marker-status"></p>
+            </section>
             <div class="source-head">
               <span class="section-label">SOURCES</span>
               <span id="sourceCount">0</span>

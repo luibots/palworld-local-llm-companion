@@ -4,7 +4,7 @@ import re
 import httpx
 
 from .config import Settings
-from .models import Answer, RetrievedSource
+from .models import Answer, MapMarker, RetrievedSource
 from .ollama import OllamaClient
 from .palworld import PalworldClient
 from .store import VectorStore
@@ -29,6 +29,8 @@ Keep directions practical and concise."""
 log = logging.getLogger(__name__)
 WORD_PATTERN = re.compile(r"[a-z0-9]+")
 COORDINATE_PATTERN = re.compile(r"\(-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?\)")
+COORDINATE_CAPTURE_PATTERN = re.compile(r"\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)")
+CITATION_PATTERN = re.compile(r"\[([^\]]+)\]")
 STOP_WORDS = {
     "a",
     "about",
@@ -122,7 +124,13 @@ class Companion:
         prompt = f"Question: {question}\n\nEvidence:\n{evidence}"
         text = _normalize_output(await self.ollama.chat(SYSTEM_PROMPT, prompt))
         confidence = _confidence(sources)
-        return Answer(text=text, confidence=confidence, sources=sources)
+        coordinates = _extract_map_markers(text, sources)
+        return Answer(
+            text=text,
+            confidence=confidence,
+            sources=sources,
+            coordinates=coordinates,
+        )
 
 
 def _question_benefits_from_web(question: str) -> bool:
@@ -174,6 +182,54 @@ def _rerank_local(
 def _normalize_output(text: str) -> str:
     text = re.sub(r"\[source_id:\s*([^\]]+)\]", r"[\1]", text, flags=re.IGNORECASE)
     return re.sub(r"\*\*([^*\n]+)\*\*", r"\1", text)
+
+
+def _extract_map_markers(
+    text: str,
+    sources: list[RetrievedSource],
+    limit: int = 12,
+) -> list[MapMarker]:
+    source_titles = {source.source_id: source.title for source in sources}
+    markers: list[MapMarker] = []
+    seen: set[tuple[float, float]] = set()
+
+    for line in text.splitlines():
+        matches = list(COORDINATE_CAPTURE_PATTERN.finditer(line))
+        if not matches:
+            continue
+
+        citation_match = CITATION_PATTERN.search(line)
+        source_id = citation_match.group(1) if citation_match else None
+        label = _marker_label(line, source_titles.get(source_id or ""))
+        for match in matches:
+            x, y = float(match.group(1)), float(match.group(2))
+            key = (x, y)
+            if key in seen:
+                continue
+            seen.add(key)
+            markers.append(MapMarker(label=label, x=x, y=y, source_id=source_id))
+            if len(markers) >= limit:
+                return markers
+
+    return markers
+
+
+def _marker_label(line: str, source_title: str) -> str:
+    cleaned = CITATION_PATTERN.sub("", line)
+    cleaned = COORDINATE_CAPTURE_PATTERN.sub("", cleaned)
+    cleaned = re.sub(r"^\s*[-*\d.)]+\s*", "", cleaned).strip(" :-")
+    label = re.split(
+        r"\s+(?:at|has|around|near|contains|offers)\s+|:\s*",
+        cleaned,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip(" :-")
+    generic = {"", "coordinate", "coordinates", "location", "locations", "route"}
+    if label.lower() in generic:
+        label = source_title
+    if not label:
+        label = "Map location"
+    return label[:80]
 
 
 def _confidence(sources: list[RetrievedSource]) -> str:

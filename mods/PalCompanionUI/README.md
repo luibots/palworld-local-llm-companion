@@ -5,7 +5,13 @@ Pal Companion at `http://127.0.0.1:8765/`.
 
 This mod does not contain Ollama, credentials, game data, or server code. It only
 creates an Unreal UMG browser panel and points it at the loopback companion service.
+Answers can be read aloud through the embedded browser's free operating-system voice.
+Location answers expose structured coordinates, and the in-game panel can pass up to
+12 of them to Palworld's local custom map-marker system. Neither feature contacts or
+changes the dedicated server.
 
 The current script is a development prototype targeting Palworld Steam build
 `24181527`. It must be tested against the current UE4SS experimental Palworld fork
-before Workshop packaging.
+before Workshop packaging. Marker placement uses reflected
+`PalLocationManager:AddLocalCustomMarker` behavior and logs failures to the UE4SS
+console if the current game build changes that function.
