@@ -2,7 +2,7 @@ local UEHelpers = require("UEHelpers")
 
 local MOD_NAME = "PalCompanionUI"
 local COMPANION_URL = "http://127.0.0.1:8765/?client=ue4ss"
-local MARKER_ICON_TYPE = 0
+local DEFAULT_MARKER_ICON_TYPE = 0
 local browser_widget = nil
 local root_widget = nil
 local visible = false
@@ -85,7 +85,7 @@ local function map_to_world(map_x, map_y)
     return world_x, world_y
 end
 
-local function add_map_marker(map_x, map_y)
+local function add_map_marker(map_x, map_y, icon_type)
     local controller = UEHelpers:GetPlayerController()
     if not valid(controller) then
         error("PlayerController is not ready")
@@ -102,11 +102,18 @@ local function add_map_marker(map_x, map_y)
     end
 
     local world_x, world_y = map_to_world(map_x, map_y)
+    local marker_icon_type = tonumber(icon_type) or DEFAULT_MARKER_ICON_TYPE
+    marker_icon_type = math.max(0, math.min(13, math.floor(marker_icon_type)))
     location_manager:AddLocalCustomMarker(
         {X = world_x, Y = world_y, Z = 0.0},
-        MARKER_ICON_TYPE
+        marker_icon_type
     )
-    log(string.format("Placed map marker at %.1f, %.1f", map_x, map_y))
+    log(string.format(
+        "Placed map marker at %.1f, %.1f with icon %d",
+        map_x,
+        map_y,
+        marker_icon_type
+    ))
 end
 
 local function process_marker_command(command)
@@ -118,9 +125,15 @@ local function process_marker_command(command)
 
     local coordinates = {}
     for pair in payload:gmatch("[^;]+") do
-        local x, y = pair:match("^(-?[%d%.]+),(-?[%d%.]+)$")
+        local x, y, icon_type = pair:match(
+            "^(-?[%d%.]+),(-?[%d%.]+),?(%d*)$"
+        )
         if x and y then
-            table.insert(coordinates, {x = tonumber(x), y = tonumber(y)})
+            table.insert(coordinates, {
+                x = tonumber(x),
+                y = tonumber(y),
+                icon_type = tonumber(icon_type) or DEFAULT_MARKER_ICON_TYPE
+            })
         end
         if #coordinates >= 12 then
             break
@@ -137,7 +150,8 @@ local function process_marker_command(command)
             local ok, message = pcall(
                 add_map_marker,
                 coordinate.x,
-                coordinate.y
+                coordinate.y,
+                coordinate.icon_type
             )
             if not ok then
                 log("Map marker failed: " .. tostring(message))

@@ -146,6 +146,27 @@ def test_answer_coordinates_become_structured_map_markers() -> None:
     ]
     assert markers[0].label == "Mount Obsidian"
     assert markers[0].source_id == "guide:coal"
+    assert markers[0].icon == "resource"
+
+
+def test_map_marker_icons_follow_location_context() -> None:
+    markers = _extract_map_markers(
+        "- Alpha Pal boss at (10, 20).\n"
+        "- Forgotten dungeon at (30, 40).\n"
+        "- Wandering merchant at (50, 60).",
+        [],
+    )
+
+    assert [marker.icon for marker in markers] == ["boss", "dungeon", "person"]
+
+
+def test_ambiguous_marker_inherits_answer_subject_icon() -> None:
+    markers = _extract_map_markers(
+        "Coal locations:\n- Mount Obsidian at (-233, -365).\n- Verdant Brook at (190, -41).",
+        [],
+    )
+
+    assert [marker.icon for marker in markers] == ["resource", "resource"]
 
 
 def test_answer_cache_key_normalizes_case_whitespace_and_punctuation() -> None:

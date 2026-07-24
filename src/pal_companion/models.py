@@ -34,6 +34,22 @@ class MapMarker(BaseModel):
     x: float
     y: float
     source_id: str | None = None
+    icon: Literal[
+        "pin",
+        "star",
+        "box",
+        "resource",
+        "pal",
+        "food",
+        "boss",
+        "base",
+        "fruit",
+        "dungeon",
+        "egg",
+        "person",
+        "book",
+        "flower",
+    ] = "pin"
 
 
 class Answer(BaseModel):

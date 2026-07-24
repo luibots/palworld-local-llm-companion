@@ -39,6 +39,8 @@ Answers with map coordinates expose copy controls in a normal browser and local
 Palworld marker controls when opened through the client-only UE4SS overlay.
 The always-available `MAP TARGET` control also accepts an exact X/Y pair and places
 a native custom marker, avoiding manual map panning.
+In the in-game overlay, coordinate answers ask for confirmation. Saying `yes` (or
+using the confirmation button) places them with a matching native marker category.
 
 ## Surfaces
 

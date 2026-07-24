@@ -120,7 +120,9 @@ class Companion:
             self._cache_ttl(allow_web=allow_web, include_live=include_live),
         )
         if cached:
-            return cached
+            return cached.model_copy(
+                update={"coordinates": _extract_map_markers(cached.text, cached.sources)}
+            )
 
         existing = self._inflight.get(cache_key)
         if existing:
@@ -474,14 +476,18 @@ def _extract_map_markers(
 
         citation_match = CITATION_PATTERN.search(line)
         source_id = citation_match.group(1) if citation_match else None
-        label = _marker_label(line, source_titles.get(source_id or ""))
+        source_title = source_titles.get(source_id or "")
+        label = _marker_label(line, source_title)
+        icon = _marker_icon(line, source_title, text)
         for match in matches:
             x, y = float(match.group(1)), float(match.group(2))
             key = (x, y)
             if key in seen:
                 continue
             seen.add(key)
-            markers.append(MapMarker(label=label, x=x, y=y, source_id=source_id))
+            markers.append(
+                MapMarker(label=label, x=x, y=y, source_id=source_id, icon=icon)
+            )
             if len(markers) >= limit:
                 return markers
 
@@ -504,6 +510,35 @@ def _marker_label(line: str, source_title: str) -> str:
     if not label:
         label = "Map location"
     return label[:80]
+
+
+def _marker_icon(line: str, source_title: str, answer_text: str = "") -> str:
+    categories = (
+        ("boss", r"\b(?:boss|alpha|predator)\b"),
+        ("dungeon", r"\b(?:dungeon|cave|mineshaft)\b"),
+        ("egg", r"\b(?:egg|breeding)\b"),
+        ("base", r"\b(?:base|camp|home|settlement)\b"),
+        ("person", r"\b(?:merchant|vendor|trader|person|npc)\b"),
+        ("food", r"\b(?:bread|food|meal|cake)\b"),
+        ("fruit", r"\b(?:fruit|berry|apple|farm)\b"),
+        ("flower", r"\b(?:flower|lotus)\b"),
+        ("book", r"\b(?:book|manual|journal|note)\b"),
+        (
+            "resource",
+            (
+                r"\b(?:coal|ore|stone|sulfur|quartz|paldium|ingot|oil|wood|fiber|"
+                r"mining|resource)\b"
+            ),
+        ),
+        ("pal", r"\b(?:pal|capture|sphere)\b"),
+        ("box", r"\b(?:chest|box|crate|supply drop)\b"),
+        ("star", r"\b(?:recommended|best|priority)\b"),
+    )
+    for context in (f"{line} {source_title}".lower(), answer_text.lower()):
+        for icon, pattern in categories:
+            if re.search(pattern, context):
+                return icon
+    return "pin"
 
 
 def _confidence(sources: list[RetrievedSource]) -> str:

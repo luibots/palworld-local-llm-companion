@@ -803,6 +803,51 @@ input[type="text"],
   padding-top: 0;
 }
 
+.marker-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 9px;
+  border: 1px solid #59636f;
+  border-left: 4px solid var(--gold);
+  border-radius: 5px;
+  padding: 7px 8px 7px 10px;
+  background: #20262e;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  text-shadow: 0 1px 1px #000;
+}
+
+.marker-prompt[hidden] {
+  display: none;
+}
+
+.marker-prompt-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.marker-prompt-actions button {
+  min-width: 42px;
+  height: 26px;
+  border: 1px solid #77828d;
+  border-radius: 4px;
+  background: #343c46;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.marker-prompt-actions button:first-child {
+  border-color: #f4c257;
+  background: var(--gold);
+  color: #181107;
+}
+
 .markers {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -812,7 +857,7 @@ input[type="text"],
 
 .marker {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: 27px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   min-height: 45px;
@@ -821,6 +866,51 @@ input[type="text"],
   border-radius: 3px;
   padding: 5px 6px 5px 10px;
   background: #242a32;
+}
+
+.marker-icon {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid #9aa5af;
+  border-radius: 50%;
+  background: #444d58;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 950;
+  text-shadow: 0 1px 1px #000;
+}
+
+.marker-icon.resource,
+.marker-icon.box {
+  border-color: #e6be66;
+  background: #85662d;
+}
+
+.marker-icon.pal,
+.marker-icon.dungeon {
+  border-color: #74d6e6;
+  background: #276c79;
+}
+
+.marker-icon.boss {
+  border-color: #ff8c76;
+  background: #963c33;
+}
+
+.marker-icon.base,
+.marker-icon.person {
+  border-color: #8fd8a8;
+  background: #34724a;
+}
+
+.marker-icon.egg,
+.marker-icon.food,
+.marker-icon.fruit,
+.marker-icon.flower {
+  border-color: #e8a9cc;
+  background: #81506c;
 }
 
 .marker-label {

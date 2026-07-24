@@ -31,6 +31,10 @@ const stopVoiceButton = document.querySelector("#stopVoiceButton");
 const markerSection = document.querySelector("#markerSection");
 const markersRoot = document.querySelector("#markers");
 const placeAllButton = document.querySelector("#placeAllButton");
+const markerPrompt = document.querySelector("#markerPrompt");
+const markerPromptText = document.querySelector("#markerPromptText");
+const confirmMarkersButton = document.querySelector("#confirmMarkersButton");
+const declineMarkersButton = document.querySelector("#declineMarkersButton");
 const markerStatus = document.querySelector("#markerStatus");
 const sourcesRoot = document.querySelector("#sources");
 const sourceCount = document.querySelector("#sourceCount");
@@ -39,9 +43,28 @@ const queryParams = new URLSearchParams(window.location.search);
 const gameClient = queryParams.get("client") === "ue4ss";
 const playerName = queryParams.get("player")?.trim() || null;
 const stopVoicePattern = /^(?:please\s+)?(?:stop|stop\s+(?:talking|speaking|voice)|be\s+quiet|silence|shut\s+up)(?:\s+to\s+me)?[.!]?$/i;
+const confirmMarkerPattern = /^(?:yes|yeah|yep|sure|okay|ok|do it|place (?:it|them)|put (?:it|them)(?: on (?:the|my) map)?|mark (?:it|them))[\s.!]*$/i;
+const declineMarkerPattern = /^(?:no|nope|not now|cancel|don't|do not)[\s.!]*$/i;
+const markerIcons = {
+  pin: { type: 0, glyph: "+", label: "Pinpoint" },
+  star: { type: 1, glyph: "*", label: "Star" },
+  box: { type: 2, glyph: "B", label: "Chest" },
+  resource: { type: 3, glyph: "R", label: "Resource" },
+  pal: { type: 4, glyph: "P", label: "Pal" },
+  food: { type: 5, glyph: "F", label: "Food" },
+  boss: { type: 6, glyph: "!", label: "Boss" },
+  base: { type: 7, glyph: "H", label: "Base" },
+  fruit: { type: 8, glyph: "A", label: "Fruit" },
+  dungeon: { type: 9, glyph: "D", label: "Dungeon" },
+  egg: { type: 10, glyph: "E", label: "Egg" },
+  person: { type: 11, glyph: "N", label: "Person" },
+  book: { type: 12, glyph: "K", label: "Book" },
+  flower: { type: 13, glyph: "L", label: "Flower" },
+};
 let currentAnswer = "";
 let currentSpokenSummary = "";
 let currentMarkers = [];
+let pendingMarkers = [];
 let currentAudio = null;
 let currentAudioUrl = null;
 let voiceAbortController = null;
@@ -187,7 +210,10 @@ async function readAnswer() {
 
 function markerCommand(markers) {
   const payload = markers
-    .map((marker) => `${Number(marker.x)},${Number(marker.y)}`)
+    .map((marker) => {
+      const icon = markerIcons[marker.icon] || markerIcons.pin;
+      return `${Number(marker.x)},${Number(marker.y)},${icon.type}`;
+    })
     .join(";");
   window.location.hash = `palmarkers=${Date.now()};${payload}`;
   setMarkerStatus(
@@ -230,6 +256,20 @@ function activateMarkers(markers) {
     });
 }
 
+function finishMarkerPrompt(accepted) {
+  if (!pendingMarkers.length) return;
+  const markers = pendingMarkers;
+  pendingMarkers = [];
+  markerPrompt.hidden = true;
+  if (accepted) {
+    activateMarkers(markers);
+  } else {
+    setMarkerStatus("MARKERS NOT PLACED");
+  }
+  question.value = "";
+  question.focus();
+}
+
 function placeManualTarget() {
   const x = Number(targetX.value);
   const y = Number(targetY.value);
@@ -246,8 +286,14 @@ function placeManualTarget() {
 
 function renderMarkers(markers) {
   currentMarkers = markers;
+  pendingMarkers = gameClient ? [...markers] : [];
   markersRoot.replaceChildren();
   markerSection.hidden = markers.length === 0;
+  markerPrompt.hidden = pendingMarkers.length === 0;
+  markerPromptText.textContent =
+    markers.length === 1
+      ? "PLACE THIS ON YOUR MAP? SAY YES OR NO."
+      : `PLACE ALL ${markers.length} ON YOUR MAP? SAY YES OR NO.`;
   setMarkerStatus("");
   placeAllButton.textContent = gameClient ? "PLACE ALL" : "COPY ALL";
 
@@ -260,6 +306,13 @@ function renderMarkers(markers) {
     label.textContent = marker.label;
     label.title = marker.label;
 
+    const iconData = markerIcons[marker.icon] || markerIcons.pin;
+    const icon = document.createElement("span");
+    icon.className = `marker-icon ${marker.icon || "pin"}`;
+    icon.textContent = iconData.glyph;
+    icon.title = `${iconData.label} marker`;
+    icon.setAttribute("aria-hidden", "true");
+
     const coordinates = document.createElement("span");
     coordinates.className = "marker-coordinates";
     coordinates.textContent = `${marker.x}, ${marker.y}`;
@@ -270,7 +323,7 @@ function renderMarkers(markers) {
     action.textContent = gameClient ? "PLACE" : "COPY";
     action.addEventListener("click", () => activateMarkers([marker]));
 
-    row.append(label, coordinates, action);
+    row.append(icon, label, coordinates, action);
     markersRoot.append(row);
   });
 }
@@ -347,6 +400,14 @@ form.addEventListener("submit", async (event) => {
     question.focus();
     return;
   }
+  if (pendingMarkers.length && confirmMarkerPattern.test(text)) {
+    finishMarkerPrompt(true);
+    return;
+  }
+  if (pendingMarkers.length && declineMarkerPattern.test(text)) {
+    finishMarkerPrompt(false);
+    return;
+  }
 
   stopVoice("VOICE READY");
   askButton.disabled = true;
@@ -374,6 +435,11 @@ form.addEventListener("submit", async (event) => {
     confidence.textContent =
       `${data.confidence.toUpperCase()} CONFIDENCE${data.cached ? " / CACHED" : ""}`;
     renderMarkers(data.coordinates || []);
+    if (gameClient && currentMarkers.length) {
+      currentSpokenSummary =
+        `${currentSpokenSummary} Want me to place ` +
+        `${currentMarkers.length === 1 ? "this location" : "these locations"} on your map?`;
+    }
     renderSources(data.sources || []);
     remember(text);
     show(answerState);
@@ -407,6 +473,8 @@ playerLevel.addEventListener("change", () => {
 readButton.addEventListener("click", readAnswer);
 stopVoiceButton.addEventListener("click", () => stopVoice());
 placeAllButton.addEventListener("click", () => activateMarkers(currentMarkers));
+confirmMarkersButton.addEventListener("click", () => finishMarkerPrompt(true));
+declineMarkersButton.addEventListener("click", () => finishMarkerPrompt(false));
 placeTargetButton.addEventListener("click", placeManualTarget);
 [targetX, targetY].forEach((input) => {
   input.addEventListener("keydown", (event) => {
