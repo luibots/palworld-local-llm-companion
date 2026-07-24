@@ -24,6 +24,9 @@ companion says it lacks evidence rather than inventing coordinates.
 
 ## Architecture
 
+See [Architecture and data flow](docs/ARCHITECTURE.md) for dark-theme C4 and Mermaid
+diagrams covering system boundaries, retrieval, generation, and credential isolation.
+
 ```text
 Question
   |
