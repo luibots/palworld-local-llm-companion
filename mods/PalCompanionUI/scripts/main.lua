@@ -7,6 +7,10 @@ local browser_widget = nil
 local root_widget = nil
 local visible = false
 local last_marker_command = nil
+local last_close_command = nil
+local input_captured = false
+local previous_move_input_ignored = false
+local previous_look_input_ignored = false
 
 local function log(message)
     print(string.format("[%s] %s\n", MOD_NAME, message))
@@ -61,27 +65,64 @@ end
 
 local function set_game_input(controller)
     controller.bShowMouseCursor = false
+    pcall(function()
+        controller:SetIgnoreMoveInput(previous_move_input_ignored)
+        controller:SetIgnoreLookInput(previous_look_input_ignored)
+    end)
+    input_captured = false
     local input_library = StaticFindObject(
         "/Script/UMG.Default__WidgetBlueprintLibrary"
     )
     if valid(input_library) then
-        input_library:SetInputMode_GameOnly(controller, false)
+        input_library:SetInputMode_GameOnly(controller, true)
     end
 end
 
 local function set_ui_input(controller, widget)
+    if not input_captured then
+        local move_ok, move_ignored = pcall(function()
+            return controller:IsMoveInputIgnored()
+        end)
+        local look_ok, look_ignored = pcall(function()
+            return controller:IsLookInputIgnored()
+        end)
+        previous_move_input_ignored = move_ok and move_ignored or false
+        previous_look_input_ignored = look_ok and look_ignored or false
+        input_captured = true
+    end
+
     controller.bShowMouseCursor = true
+    pcall(function()
+        controller:SetIgnoreMoveInput(true)
+        controller:SetIgnoreLookInput(true)
+    end)
     local input_library = StaticFindObject(
         "/Script/UMG.Default__WidgetBlueprintLibrary"
     )
     if valid(input_library) then
-        input_library:SetInputMode_GameAndUIEx(
-            controller,
-            widget,
-            0,
-            false,
-            false
-        )
+        local mode_ok, mode_error = pcall(function()
+            input_library:SetInputMode_UIOnlyEx(
+                controller,
+                browser_widget or widget,
+                0,
+                true
+            )
+        end)
+        if not mode_ok then
+            log("UI-only mode unavailable; using locked Game+UI mode: " .. tostring(mode_error))
+            input_library:SetInputMode_GameAndUIEx(
+                controller,
+                browser_widget or widget,
+                0,
+                false,
+                true
+            )
+        end
+    end
+    if valid(browser_widget) then
+        pcall(function()
+            browser_widget:SetKeyboardFocus()
+        end)
     end
 end
 
@@ -279,6 +320,19 @@ local function open_vendor_directory()
     end)
 end
 
+local function close_overlay()
+    local controller = UEHelpers:GetPlayerController()
+    if not valid(controller) then
+        return
+    end
+    visible = false
+    if valid(root_widget) then
+        root_widget:SetVisibility(1)
+    end
+    set_game_input(controller)
+    log("Overlay closed")
+end
+
 RegisterKeyBind(Key.F2, toggle_overlay)
 RegisterKeyBind(Key.F3, open_vendor_directory)
 
@@ -298,6 +352,13 @@ LoopAsync(250, function()
     if command and command ~= last_marker_command then
         last_marker_command = command
         process_marker_command(command)
+    end
+    local close_command = tostring(url):match("#palclose=([^#]+)")
+    if close_command and close_command ~= last_close_command then
+        last_close_command = close_command
+        ExecuteInGameThread(function()
+            close_overlay()
+        end)
     end
     return false
 end)

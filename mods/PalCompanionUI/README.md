@@ -4,6 +4,10 @@ Client-only UE4SS Lua prototype. Press `F2` while in a world to open the local
 Pal Companion at `http://127.0.0.1:8765/`. Press `F3` to open the verified vendor
 directory directly without an LLM request. The overlay passes the local player name
 to the companion so an authorized live-server connection can match level and location.
+While the overlay is visible, it captures keyboard and mouse input for the embedded
+browser so typing cannot also trigger Palworld controls. Closing it restores the
+game's previous movement and camera input state; `Escape` provides an in-browser
+close path in addition to the `F2` toggle.
 
 This mod does not contain Ollama, credentials, game data, or server code. It only
 creates an Unreal UMG browser panel and points it at the loopback companion service.

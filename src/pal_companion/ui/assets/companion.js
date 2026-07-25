@@ -878,6 +878,12 @@ placeTargetButton.addEventListener("click", placeManualTarget);
 vendorButton.addEventListener("click", openVendorDirectory);
 closeVendorsButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
 document.addEventListener("keydown", (event) => {
+  if (gameClient && event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    window.location.hash = `palclose=${Date.now()}`;
+    return;
+  }
   if (event.key === "F3") {
     event.preventDefault();
     openVendorDirectory();
