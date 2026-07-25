@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pal Companion</title>
+    <title>Pal Companion 0.2</title>
     <link rel="stylesheet" href="/assets/companion.css" />
   </head>
   <body>
@@ -16,9 +16,14 @@
             <p>LOCAL INTELLIGENCE DECK</p>
           </div>
         </div>
-        <div class="status" id="status">
-          <span class="status-dot"></span>
-          <span id="statusText">CONNECTING</span>
+        <div class="topbar-actions">
+          <button id="vendorButton" class="nav-button" type="button">
+            VENDORS <kbd>F3</kbd>
+          </button>
+          <div class="status" id="status">
+            <span class="status-dot"></span>
+            <span id="statusText">CONNECTING</span>
+          </div>
         </div>
       </header>
 
@@ -117,6 +122,24 @@
             <strong>SEARCHING VERIFIED SOURCES</strong>
           </div>
 
+          <section id="vendorState" class="vendor-state" hidden>
+            <div class="vendor-head">
+              <div>
+                <span class="section-label">PAL BROKER NETWORK</span>
+                <h2>VERIFIED VENDORS</h2>
+              </div>
+              <div class="vendor-head-actions">
+                <span id="vendorProximity" class="vendor-proximity">CHECKING POSITION</span>
+                <button id="closeVendorsButton" class="tool-button" type="button">BACK</button>
+              </div>
+            </div>
+            <p class="vendor-intro">
+              Rotating Pal stock. Mark a route instantly or queue a location card for the guild.
+            </p>
+            <div id="vendorList" class="vendor-list"></div>
+            <p id="vendorStatus" class="vendor-status"></p>
+          </section>
+
           <div id="answerState" hidden>
             <div class="answer-head">
               <span class="section-label">ANSWER</span>
@@ -161,7 +184,7 @@
       </section>
 
       <footer>
-        <span>F2 CLOSE</span>
+        <span>F2 COMPANION / F3 VENDORS</span>
         <span>FACTS FROM DATA. STRATEGY FROM AI.</span>
         <span id="indexCount">0 SOURCES INDEXED</span>
       </footer>

@@ -180,7 +180,7 @@ local function process_marker_command(command)
     end)
 end
 
-local function build_overlay()
+local function build_overlay(initial_url)
     local controller = UEHelpers:GetPlayerController()
     if not valid(controller) then
         error("PlayerController is not ready")
@@ -196,7 +196,7 @@ local function build_overlay()
 
     root_widget.WidgetTree = widget_tree
     widget_tree.RootWidget = canvas
-    local url = companion_url(controller)
+    local url = initial_url or companion_url(controller)
     browser_widget.InitialURL = url
     browser_widget.bSupportsTransparency = true
 
@@ -213,6 +213,17 @@ local function build_overlay()
     root_widget:SetVisibility(1)
     visible = false
     log("Overlay created")
+end
+
+local function show_overlay(controller, url)
+    if not valid(root_widget) or not valid(browser_widget) then
+        build_overlay(url)
+    else
+        browser_widget:LoadURL(url)
+    end
+    visible = true
+    root_widget:SetVisibility(0)
+    set_ui_input(controller, root_widget)
 end
 
 local function toggle_overlay()
@@ -244,7 +255,26 @@ local function toggle_overlay()
     end)
 end
 
+local function open_vendor_directory()
+    ExecuteInGameThread(function()
+        local controller = UEHelpers:GetPlayerController()
+        if not valid(controller) then
+            log("PlayerController is not ready")
+            return
+        end
+
+        local url = companion_url(controller) .. "&view=vendors"
+        local ok, message = pcall(show_overlay, controller, url)
+        if not ok then
+            log("Vendor directory failed: " .. tostring(message))
+            return
+        end
+        log("Vendor directory opened")
+    end)
+end
+
 RegisterKeyBind(Key.F2, toggle_overlay)
+RegisterKeyBind(Key.F3, open_vendor_directory)
 
 LoopAsync(250, function()
     if not valid(browser_widget) then
@@ -266,4 +296,4 @@ LoopAsync(250, function()
     return false
 end)
 
-log("Loaded. Press F2 in a world to open Pal Companion.")
+log("Loaded. Press F2 for Pal Companion or F3 for verified vendors.")

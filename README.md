@@ -54,6 +54,7 @@ speech AI model. It only recognizes the approved yes/no confirmation phrases.
 - Local HTTP `POST /ask` for PAL COMMAND and overlays
 - Discord `/askpal`
 - In-game `F2` Paldeck overlay through the client-only UE4SS UI prototype
+- In-game `F3` verified vendor directory with native markers and guild sharing
 
 ## Architecture
 
@@ -161,7 +162,14 @@ The UI prototype is client-only. It does not require a server mod or server rest
    ```
 
 4. Start the companion locally with `pal-companion api`.
-5. Launch Palworld, enter a world, and press `F2`.
+5. Launch Palworld and enter a world. Press `F2` for the companion or `F3` for
+   the instant vendor directory.
+
+The vendor directory is local catalog data and opens without waiting for Ollama.
+When authorized live player coordinates are available, it sorts verified brokers by
+straight-line map distance. `MARK ROUTE` places a native person marker through the
+client bridge. `GUILD` queues a fixed vendor card for the PAL COMMAND Discord bot;
+it does not allow arbitrary browser-authored announcements.
 
 Do not install a second manual UE4SS copy alongside the Workshop version. The installer
 refuses to modify Palworld until the official `Mods\NativeMods\UE4SS` path exists.

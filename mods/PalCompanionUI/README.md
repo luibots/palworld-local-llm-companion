@@ -1,7 +1,8 @@
 # Pal Companion UI
 
 Client-only UE4SS Lua prototype. Press `F2` while in a world to open the local
-Pal Companion at `http://127.0.0.1:8765/`. The overlay passes the local player name
+Pal Companion at `http://127.0.0.1:8765/`. Press `F3` to open the verified vendor
+directory directly without an LLM request. The overlay passes the local player name
 to the companion so an authorized live-server connection can match level and location.
 
 This mod does not contain Ollama, credentials, game data, or server code. It only
@@ -15,6 +16,11 @@ Optional microphone confirmation uses the companion process and default Windows
 microphone only while a marker question is visible. Windows uses a constrained
 yes/no grammar instead of loading a speech AI model. The bundled chime plays after the
 Lua bridge acknowledges successful placement.
+
+The vendor directory uses a bundled, verified catalog, optionally sorts locations by
+the player's live position, and places a native person marker. Its guild action queues
+a sanitized location event for the existing PAL COMMAND Discord bot. It does not send
+credentials, live player coordinates, or arbitrary text to Discord.
 
 The current script is a development prototype targeting Palworld Steam build
 `24181527`. It must be tested against the current UE4SS experimental Palworld fork

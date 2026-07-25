@@ -1,21 +1,23 @@
 import secrets
 from pathlib import Path
 
+import httpx
 from fastapi import Cookie, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .models import Answer, AskRequest, VoiceRequest
+from .models import Answer, AskRequest, ShareVendorRequest, VendorLocation, VoiceRequest
 from .rag import Companion
 from .transcription import ConfirmationTranscriber
+from .vendors import find_vendor, list_vendors, queue_vendor_share
 from .voice import NeuralVoice
 
 settings = Settings()
 companion = Companion(settings)
 neural_voice = NeuralVoice(settings.voice_cache_path)
 confirmation_transcriber = ConfirmationTranscriber()
-app = FastAPI(title="Palworld Local LLM Companion", version="0.1.0")
+app = FastAPI(title="Palworld Local LLM Companion", version="0.2.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
 app.mount("/assets", StaticFiles(directory=web_root / "assets"), name="assets")
@@ -49,6 +51,37 @@ async def health() -> dict[str, str | int | bool]:
             settings.palworld_rest_url and settings.palworld_admin_password
         ),
     }
+
+
+@app.get("/vendors", response_model=list[VendorLocation])
+async def vendors(
+    player_name: str | None = None,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> list[VendorLocation]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    try:
+        origin = await companion.palworld.player_position(player_name)
+    except (httpx.HTTPError, TypeError, ValueError):
+        origin = None
+    return list_vendors(origin)
+
+
+@app.post("/guild/share-vendor")
+async def share_vendor(
+    request: ShareVendorRequest,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> dict[str, str]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    vendor = find_vendor(request.vendor_id)
+    if vendor is None:
+        raise HTTPException(status_code=404, detail="Unknown vendor.")
+    try:
+        queue_vendor_share(vendor, request.player_name)
+    except OSError as error:
+        raise HTTPException(status_code=503, detail="Could not queue the Discord post.") from error
+    return {"status": "queued", "vendor_id": vendor.vendor_id}
 
 
 @app.post("/ask", response_model=Answer)

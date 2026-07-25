@@ -29,6 +29,27 @@ class VoiceRequest(BaseModel):
     voice: str = "emma"
 
 
+class VendorLocation(BaseModel):
+    vendor_id: str
+    name: str
+    vendor_type: Literal["black-marketeer", "pal-merchant"]
+    x: float
+    y: float
+    level: int | None = None
+    fast_travel: str
+    route: str
+    stock_summary: str
+    reliability: Literal["verified", "community"]
+    underground: bool = False
+    distance: float | None = None
+    source_url: str | None = None
+
+
+class ShareVendorRequest(BaseModel):
+    vendor_id: str = Field(min_length=2, max_length=80)
+    player_name: str | None = Field(default=None, max_length=100)
+
+
 class MapMarker(BaseModel):
     label: str
     x: float

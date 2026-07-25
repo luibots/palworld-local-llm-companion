@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from pal_companion.rag import (
 )
 from pal_companion.store import VectorStore, cosine_similarity
 from pal_companion.transcription import ConfirmationTranscriber, _normalize_transcript
+from pal_companion.vendors import find_vendor, list_vendors, queue_vendor_share
 from pal_companion.voice import NeuralVoice
 
 
@@ -78,6 +80,9 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert "live_context_configured" in health.json()
         assert health.json()["voice_engine"] == "edge-neural"
         assert health.json()["speech_engine"] == "windows-sapi-grammar"
+        vendors = client.get("/vendors")
+        assert vendors.status_code == 200
+        assert vendors.json()[0]["vendor_id"] == "desolate-church"
 
     with TestClient(app) as client:
         denied = client.post(
@@ -95,6 +100,8 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert denied_transcription.status_code == 403
         denied_listen = client.post("/listen-confirmation")
         assert denied_listen.status_code == 403
+        denied_vendors = client.get("/vendors")
+        assert denied_vendors.status_code == 403
 
 
 def test_confirmation_transcription_endpoint_is_session_protected(
@@ -282,6 +289,30 @@ def test_current_player_matches_name_or_only_online_player() -> None:
     ]
     assert _current_player(players, "luis") == players[0]
     assert _current_player([players[1]], None) == players[1]
+
+
+def test_vendor_catalog_sorts_by_live_distance() -> None:
+    nearest_to_cove = list_vendors((-290, -180))
+    assert nearest_to_cove[0].vendor_id == "cove-mineshaft"
+    assert nearest_to_cove[0].distance == pytest.approx(7)
+    assert find_vendor("missing") is None
+
+
+def test_vendor_share_queue_contains_only_catalog_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    vendor = find_vendor("desolate-church")
+    assert vendor is not None
+
+    queue_path = queue_vendor_share(vendor, "@Luis <everyone>")
+    event = json.loads(queue_path.read_text(encoding="utf-8"))
+
+    assert event["event_type"] == "guild_location"
+    assert event["vendor_id"] == "desolate-church"
+    assert event["requested_by"] == "Luis everyone"
+    assert "password" not in event
 
 
 def test_level_route_context_selects_compatible_exact_entity_location() -> None:

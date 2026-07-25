@@ -31,4 +31,4 @@ $lines += 'PalCompanionUI : 1'
 [IO.File]::WriteAllLines($modsFile, $lines, [Text.UTF8Encoding]::new($false))
 
 Write-Host "Installed Pal Companion UI to: $destination"
-Write-Host 'Start the local companion API, launch Palworld, enter a world, and press F2.'
+Write-Host 'Start the local API, launch Palworld, then press F2 for AI or F3 for vendors.'

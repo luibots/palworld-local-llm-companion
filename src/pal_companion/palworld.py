@@ -19,12 +19,7 @@ class PalworldClient:
     ) -> list[RetrievedSource]:
         if not self.base_url:
             return _client_player_context(player_name, player_level)
-        async with httpx.AsyncClient(timeout=8, auth=self.auth) as client:
-            response = await client.get(f"{self.base_url}/v1/api/players")
-            response.raise_for_status()
-            payload = response.json()
-        players = payload.get("players", payload) if isinstance(payload, dict) else payload
-        players = players or []
+        players = await self._players()
         current = _current_player(players, player_name)
         lines: list[str] = []
         for player in players:
@@ -59,6 +54,26 @@ class PalworldClient:
                 score=1.0,
             )
         ]
+
+    async def player_position(self, player_name: str | None) -> tuple[float, float] | None:
+        if not self.base_url:
+            return None
+        players = await self._players()
+        current = _current_player(players, player_name)
+        if current is None:
+            return None
+        x, y = current.get("location_x"), current.get("location_y")
+        if x is None or y is None:
+            return None
+        return world_to_map(float(x), float(y))
+
+    async def _players(self) -> list[dict]:
+        async with httpx.AsyncClient(timeout=8, auth=self.auth) as client:
+            response = await client.get(f"{self.base_url}/v1/api/players")
+            response.raise_for_status()
+            payload = response.json()
+        players = payload.get("players", payload) if isinstance(payload, dict) else payload
+        return players or []
 
 
 def _current_player(

@@ -21,6 +21,12 @@ const voiceStatus = document.querySelector("#voiceStatus");
 const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
 const indexCount = document.querySelector("#indexCount");
+const vendorButton = document.querySelector("#vendorButton");
+const vendorState = document.querySelector("#vendorState");
+const vendorList = document.querySelector("#vendorList");
+const vendorStatus = document.querySelector("#vendorStatus");
+const vendorProximity = document.querySelector("#vendorProximity");
+const closeVendorsButton = document.querySelector("#closeVendorsButton");
 const historyRoot = document.querySelector("#history");
 const emptyState = document.querySelector("#emptyState");
 const loadingState = document.querySelector("#loadingState");
@@ -77,6 +83,7 @@ let markerRecognition = null;
 let markerListening = false;
 let markerListenAbortController = null;
 let localSpeechReady = false;
+let vendorsLoaded = false;
 const markerChime = new Audio("/assets/marker-chime.mp3");
 markerChime.preload = "auto";
 
@@ -106,10 +113,162 @@ function historyAppearance(text) {
 }
 
 function show(target) {
-  [emptyState, loadingState, answerState, errorState].forEach((item) => {
+  [emptyState, loadingState, vendorState, answerState, errorState].forEach((item) => {
     item.hidden = item !== target;
   });
 }
+
+function vendorMarker(vendor) {
+  return {
+    label: vendor.name,
+    x: vendor.x,
+    y: vendor.y,
+    icon: "person",
+  };
+}
+
+function vendorLevelStatus(vendor) {
+  const level = Number(playerLevel.value);
+  if (!level || !vendor.level) return `LV ${vendor.level || "?"}`;
+  if (vendor.level > level) return `OVER LEVEL / LV ${vendor.level}`;
+  return `LEVEL MATCH / LV ${vendor.level}`;
+}
+
+async function shareVendor(vendor, button) {
+  button.disabled = true;
+  vendorStatus.textContent = `QUEUEING ${vendor.name.toUpperCase()} FOR DISCORD`;
+  try {
+    const response = await fetch("/guild/share-vendor", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendor_id: vendor.vendor_id,
+        player_name: playerName,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Share failed (${response.status})`);
+    vendorStatus.textContent = "QUEUED FOR THE GUILD DISCORD";
+    button.textContent = "QUEUED";
+  } catch (error) {
+    vendorStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "DISCORD QUEUE FAILED";
+    button.disabled = false;
+  }
+}
+
+function renderVendors(vendors) {
+  vendorList.replaceChildren();
+  const hasDistance = vendors.some((vendor) => vendor.distance !== null);
+  vendorProximity.textContent = hasDistance ? "SORTED FROM YOUR LIVE POSITION" : "LIVE POSITION UNAVAILABLE";
+
+  vendors.forEach((vendor, index) => {
+    const card = document.createElement("article");
+    card.className = "vendor-card";
+    if (index === 0 && hasDistance) card.classList.add("nearest");
+
+    const identity = document.createElement("div");
+    identity.className = "vendor-identity";
+
+    const icon = document.createElement("span");
+    icon.className = "vendor-icon";
+    icon.textContent = "N";
+    icon.setAttribute("aria-hidden", "true");
+
+    const titleGroup = document.createElement("div");
+    const title = document.createElement("h3");
+    title.textContent = vendor.name;
+    const destination = document.createElement("p");
+    destination.textContent = vendor.fast_travel;
+    titleGroup.append(title, destination);
+    identity.append(icon, titleGroup);
+
+    const badges = document.createElement("div");
+    badges.className = "vendor-badges";
+    const levelBadge = document.createElement("span");
+    levelBadge.className =
+      Number(playerLevel.value) && vendor.level > Number(playerLevel.value)
+        ? "vendor-badge danger"
+        : "vendor-badge level";
+    levelBadge.textContent = vendorLevelStatus(vendor);
+    const reliabilityBadge = document.createElement("span");
+    reliabilityBadge.className = "vendor-badge verified";
+    reliabilityBadge.textContent = vendor.reliability.toUpperCase();
+    badges.append(levelBadge, reliabilityBadge);
+    if (vendor.underground) {
+      const caveBadge = document.createElement("span");
+      caveBadge.className = "vendor-badge cave";
+      caveBadge.textContent = "UNDERGROUND";
+      badges.append(caveBadge);
+    }
+
+    const route = document.createElement("p");
+    route.className = "vendor-route";
+    route.textContent = vendor.route;
+
+    const stock = document.createElement("p");
+    stock.className = "vendor-stock";
+    stock.textContent = vendor.stock_summary;
+
+    const coordinate = document.createElement("span");
+    coordinate.className = "vendor-coordinate";
+    coordinate.textContent = `${vendor.x}, ${vendor.y}`;
+
+    const distance = document.createElement("span");
+    distance.className = "vendor-distance";
+    distance.textContent =
+      vendor.distance === null
+        ? "DISTANCE UNKNOWN"
+        : `${Math.round(vendor.distance)} MAP UNITS AWAY${index === 0 ? " / NEAREST" : ""}`;
+
+    const actions = document.createElement("div");
+    actions.className = "vendor-actions";
+    const mark = document.createElement("button");
+    mark.className = "vendor-action primary";
+    mark.type = "button";
+    mark.textContent = gameClient ? "MARK ROUTE" : "COPY COORDS";
+    mark.addEventListener("click", () => activateMarkers([vendorMarker(vendor)]));
+    const share = document.createElement("button");
+    share.className = "vendor-action";
+    share.type = "button";
+    share.textContent = "GUILD";
+    share.addEventListener("click", () => shareVendor(vendor, share));
+    actions.append(mark, share);
+
+    const meta = document.createElement("div");
+    meta.className = "vendor-meta";
+    meta.append(coordinate, distance, actions);
+
+    card.append(identity, badges, route, stock, meta);
+    vendorList.append(card);
+  });
+}
+
+async function openVendorDirectory() {
+  stopMarkerListening();
+  stopVoice("VOICE READY");
+  show(vendorState);
+  vendorStatus.textContent = vendorsLoaded ? "" : "LOADING VERIFIED VENDORS";
+  try {
+    const params = new URLSearchParams();
+    if (playerName) params.set("player_name", playerName);
+    const response = await fetch(`/vendors?${params}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Vendor lookup failed (${response.status})`);
+    renderVendors(data);
+    vendorsLoaded = true;
+    vendorStatus.textContent = "";
+  } catch (error) {
+    vendorStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "VENDOR DIRECTORY UNAVAILABLE";
+  }
+}
+
+window.palCompanionOpenVendors = openVendorDirectory;
 
 function renderHistory() {
   historyRoot.replaceChildren();
@@ -636,6 +795,14 @@ placeAllButton.addEventListener("click", () => activateMarkers(currentMarkers));
 confirmMarkersButton.addEventListener("click", () => finishMarkerPrompt(true));
 declineMarkersButton.addEventListener("click", () => finishMarkerPrompt(false));
 placeTargetButton.addEventListener("click", placeManualTarget);
+vendorButton.addEventListener("click", openVendorDirectory);
+closeVendorsButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "F3") {
+    event.preventDefault();
+    openVendorDirectory();
+  }
+});
 [targetX, targetY].forEach((input) => {
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -647,4 +814,5 @@ placeTargetButton.addEventListener("click", placeManualTarget);
 
 renderHistory();
 checkHealth();
+if (queryParams.get("view") === "vendors") openVendorDirectory();
 window.setInterval(checkHealth, 15000);
