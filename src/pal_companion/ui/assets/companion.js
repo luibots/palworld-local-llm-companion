@@ -27,6 +27,7 @@ const vendorList = document.querySelector("#vendorList");
 const vendorStatus = document.querySelector("#vendorStatus");
 const vendorProximity = document.querySelector("#vendorProximity");
 const closeVendorsButton = document.querySelector("#closeVendorsButton");
+const rareTargetList = document.querySelector("#rareTargetList");
 const historyRoot = document.querySelector("#history");
 const emptyState = document.querySelector("#emptyState");
 const loadingState = document.querySelector("#loadingState");
@@ -167,6 +168,7 @@ function renderVendors(vendors) {
     const card = document.createElement("article");
     card.className = "vendor-card";
     if (index === 0 && hasDistance) card.classList.add("nearest");
+    if (vendor.premium_stock) card.classList.add("premium");
 
     const identity = document.createElement("div");
     identity.className = "vendor-identity";
@@ -196,6 +198,12 @@ function renderVendors(vendors) {
     reliabilityBadge.className = "vendor-badge verified";
     reliabilityBadge.textContent = vendor.reliability.toUpperCase();
     badges.append(levelBadge, reliabilityBadge);
+    if (vendor.premium_stock) {
+      const premiumBadge = document.createElement("span");
+      premiumBadge.className = "vendor-badge premium";
+      premiumBadge.textContent = "BEST VERIFIED STOCK";
+      badges.append(premiumBadge);
+    }
     if (vendor.underground) {
       const caveBadge = document.createElement("span");
       caveBadge.className = "vendor-badge cave";
@@ -209,7 +217,26 @@ function renderVendors(vendors) {
 
     const stock = document.createElement("p");
     stock.className = "vendor-stock";
-    stock.textContent = vendor.stock_summary;
+    stock.textContent =
+      `${vendor.stock_summary} Stock levels ${vendor.stock_level_min}-${vendor.stock_level_max}. ` +
+      "Final cost scales with the rolled Pal level.";
+
+    const stockHighlights = document.createElement("div");
+    stockHighlights.className = "vendor-stock-highlights";
+    vendor.stock_highlights.forEach((pal) => {
+      const highlight = document.createElement("div");
+      highlight.className = "vendor-stock-pal";
+
+      const palName = document.createElement("strong");
+      palName.textContent = pal.name;
+      const specialty = document.createElement("span");
+      specialty.textContent = pal.specialty;
+      const price = document.createElement("b");
+      price.textContent = `${pal.base_price.toLocaleString()} BASE`;
+
+      highlight.append(palName, specialty, price);
+      stockHighlights.append(highlight);
+    });
 
     const coordinate = document.createElement("span");
     coordinate.className = "vendor-coordinate";
@@ -240,8 +267,46 @@ function renderVendors(vendors) {
     meta.className = "vendor-meta";
     meta.append(coordinate, distance, actions);
 
-    card.append(identity, badges, route, stock, meta);
+    card.append(identity, badges, route, stock, stockHighlights, meta);
     vendorList.append(card);
+  });
+}
+
+function renderRareTargets(targets) {
+  rareTargetList.replaceChildren();
+  targets.forEach((target) => {
+    const card = document.createElement("article");
+    card.className = "rare-target";
+
+    const heading = document.createElement("div");
+    heading.className = "rare-target-heading";
+    const label = document.createElement("span");
+    label.textContent = "RARE HUNT";
+    const name = document.createElement("strong");
+    name.textContent = target.name;
+    const value = document.createElement("b");
+    value.textContent = `${target.base_price.toLocaleString()} BASE`;
+    heading.append(label, name, value);
+
+    const details = document.createElement("p");
+    details.textContent =
+      `LV ${target.level_min}-${target.level_max} / ${target.specialty}. ${target.vendor_note}`;
+
+    const actions = document.createElement("div");
+    actions.className = "rare-target-actions";
+    const locations = document.createElement("span");
+    locations.textContent = target.locations
+      .map((marker) => `${marker.x}, ${marker.y}`)
+      .join(" / ");
+    const mark = document.createElement("button");
+    mark.className = "vendor-action primary";
+    mark.type = "button";
+    mark.textContent = gameClient ? "MARK HUNT" : "COPY COORDS";
+    mark.addEventListener("click", () => activateMarkers(target.locations));
+    actions.append(locations, mark);
+
+    card.append(heading, details, actions);
+    rareTargetList.append(card);
   });
 }
 
@@ -253,13 +318,28 @@ async function openVendorDirectory() {
   try {
     const params = new URLSearchParams();
     if (playerName) params.set("player_name", playerName);
-    const response = await fetch(`/vendors?${params}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.detail || `Vendor lookup failed (${response.status})`);
-    renderVendors(data);
+    const [vendorResponse, targetResponse] = await Promise.all([
+      fetch(`/vendors?${params}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      }),
+      fetch("/rare-targets", {
+        credentials: "same-origin",
+        cache: "no-store",
+      }),
+    ]);
+    const [vendors, targets] = await Promise.all([
+      vendorResponse.json(),
+      targetResponse.json(),
+    ]);
+    if (!vendorResponse.ok) {
+      throw new Error(vendors.detail || `Vendor lookup failed (${vendorResponse.status})`);
+    }
+    if (!targetResponse.ok) {
+      throw new Error(targets.detail || `Rare target lookup failed (${targetResponse.status})`);
+    }
+    renderRareTargets(targets);
+    renderVendors(vendors);
     vendorsLoaded = true;
     vendorStatus.textContent = "";
   } catch (error) {

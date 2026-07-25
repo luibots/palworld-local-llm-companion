@@ -19,7 +19,12 @@ from pal_companion.rag import (
 )
 from pal_companion.store import VectorStore, cosine_similarity
 from pal_companion.transcription import ConfirmationTranscriber, _normalize_transcript
-from pal_companion.vendors import find_vendor, list_vendors, queue_vendor_share
+from pal_companion.vendors import (
+    find_vendor,
+    list_rare_targets,
+    list_vendors,
+    queue_vendor_share,
+)
 from pal_companion.voice import NeuralVoice
 
 
@@ -296,6 +301,24 @@ def test_vendor_catalog_sorts_by_live_distance() -> None:
     assert nearest_to_cove[0].vendor_id == "cove-mineshaft"
     assert nearest_to_cove[0].distance == pytest.approx(7)
     assert find_vendor("missing") is None
+    assert nearest_to_cove[0].stock_pool == "Dark_01"
+    assert nearest_to_cove[0].stock_highlights[0].name == "Warsect"
+
+    premium = find_vendor("barren-mountains")
+    assert premium is not None
+    assert premium.premium_stock is True
+    assert premium.stock_pool == "Dark_03"
+    assert premium.stock_level_min == 42
+    assert premium.stock_highlights[0].name == "Relaxaurus Lux"
+
+
+def test_rare_target_catalog_keeps_vendor_claims_separate_from_spawn_data() -> None:
+    lunaris = list_rare_targets()[0]
+    assert lunaris.name == "Lunaris"
+    assert lunaris.vendor_pool == "Dark_04"
+    assert "no verified" in lunaris.vendor_note.lower()
+    assert lunaris.locations[0].icon == "pal"
+    assert lunaris.locations[0].x == 83
 
 
 def test_vendor_share_queue_contains_only_catalog_data(

@@ -7,10 +7,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import Settings
-from .models import Answer, AskRequest, ShareVendorRequest, VendorLocation, VoiceRequest
+from .models import (
+    Answer,
+    AskRequest,
+    RarePalTarget,
+    ShareVendorRequest,
+    VendorLocation,
+    VoiceRequest,
+)
 from .rag import Companion
 from .transcription import ConfirmationTranscriber
-from .vendors import find_vendor, list_vendors, queue_vendor_share
+from .vendors import find_vendor, list_rare_targets, list_vendors, queue_vendor_share
 from .voice import NeuralVoice
 
 settings = Settings()
@@ -65,6 +72,15 @@ async def vendors(
     except (httpx.HTTPError, TypeError, ValueError):
         origin = None
     return list_vendors(origin)
+
+
+@app.get("/rare-targets", response_model=list[RarePalTarget])
+async def rare_targets(
+    pal_companion_session: str | None = Cookie(default=None),
+) -> list[RarePalTarget]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    return list_rare_targets()
 
 
 @app.post("/guild/share-vendor")

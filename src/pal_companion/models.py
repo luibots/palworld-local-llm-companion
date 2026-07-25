@@ -29,6 +29,12 @@ class VoiceRequest(BaseModel):
     voice: str = "emma"
 
 
+class VendorStockPal(BaseModel):
+    name: str
+    base_price: int
+    specialty: str
+
+
 class VendorLocation(BaseModel):
     vendor_id: str
     name: str
@@ -43,6 +49,11 @@ class VendorLocation(BaseModel):
     underground: bool = False
     distance: float | None = None
     source_url: str | None = None
+    stock_pool: str
+    stock_level_min: int
+    stock_level_max: int
+    stock_highlights: list[VendorStockPal] = Field(default_factory=list)
+    premium_stock: bool = False
 
 
 class ShareVendorRequest(BaseModel):
@@ -71,6 +82,20 @@ class MapMarker(BaseModel):
         "book",
         "flower",
     ] = "pin"
+
+
+class RarePalTarget(BaseModel):
+    target_id: str
+    name: str
+    internal_id: str
+    rarity: int
+    base_price: int
+    specialty: str
+    level_min: int
+    level_max: int
+    locations: list[MapMarker]
+    vendor_pool: str
+    vendor_note: str
 
 
 class Answer(BaseModel):
