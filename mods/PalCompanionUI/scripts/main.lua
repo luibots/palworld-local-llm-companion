@@ -47,10 +47,16 @@ local function companion_url(controller)
     local ok, player_name = pcall(function()
         return player_state:GetPlayerName()
     end)
-    if not ok or not player_name or tostring(player_name) == "" then
+    if not ok or not player_name then
         return COMPANION_URL
     end
-    return COMPANION_URL .. "&player=" .. url_encode(player_name)
+    local value_ok, player_name_value = pcall(function()
+        return player_name:ToString()
+    end)
+    if not value_ok or not player_name_value or player_name_value == "" then
+        return COMPANION_URL
+    end
+    return COMPANION_URL .. "&player=" .. url_encode(player_name_value)
 end
 
 local function set_game_input(controller)
