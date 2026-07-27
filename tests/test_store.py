@@ -7,7 +7,12 @@ from fastapi.testclient import TestClient
 from pal_companion.api import app, confirmation_transcriber
 from pal_companion.config import Settings
 from pal_companion.game_data import _clean_text, representative_locations
-from pal_companion.models import Answer, RetrievedSource, SourceDocument
+from pal_companion.models import (
+    Answer,
+    RetrievedSource,
+    SourceDocument,
+    WelcomeMessageRequest,
+)
 from pal_companion.palworld import PalworldClient, _current_player, world_to_map
 from pal_companion.rag import (
     _answer_cache_key,
@@ -26,6 +31,7 @@ from pal_companion.vendors import (
     queue_vendor_share,
 )
 from pal_companion.voice import NeuralVoice
+from pal_companion.welcome import WelcomeMessageService
 
 
 def test_cosine_similarity() -> None:
@@ -69,6 +75,49 @@ def test_answer_cache_persists_and_index_updates_invalidate_it(tmp_path: Path) -
     assert store.cached_answer_count() == 0
 
 
+def test_welcome_service_builds_context_and_remembers_returns(tmp_path: Path) -> None:
+    store = VectorStore(tmp_path / "index.sqlite3")
+    service = WelcomeMessageService(store)
+    request = WelcomeMessageRequest(
+        player_key="playerId:lui",
+        player_name="lui",
+        world_day=673,
+        online_players=["Blue", "lui", "AYEnonymous"],
+        server_name="AYEguild",
+    )
+
+    first = service.construct(request)
+    returning = service.construct(request)
+
+    assert first.message.startswith("Welcome to AYEguild, lui! World day 673.")
+    assert "You are joining Blue, AYEnonymous (3 online)." in first.message
+    assert len(first.message) <= 240
+    assert first.returning_player is False
+    assert first.visit_number == 1
+    assert returning.message.startswith("Welcome back, lui!")
+    assert returning.returning_player is True
+    assert returning.visit_number == 2
+
+
+def test_internal_welcome_endpoint_constructs_message() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/internal/welcome-message",
+            json={
+                "player_key": "test:endpoint-player",
+                "player_name": "Endpoint Pal",
+                "world_day": 673,
+                "online_players": ["Endpoint Pal"],
+                "server_name": "AYEguild",
+            },
+        )
+
+    assert response.status_code == 200
+    assert "Endpoint Pal!" in response.json()["message"]
+    assert "World day 673." in response.json()["message"]
+    assert response.json()["constructed_by"] == "context-service"
+
+
 def test_world_coordinates_match_pal_command_calibration() -> None:
     map_x, map_y = world_to_map(-353_000, 273_000)
     assert map_x == pytest.approx(250.0)
@@ -85,6 +134,7 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert "live_context_configured" in health.json()
         assert health.json()["voice_engine"] == "edge-neural"
         assert health.json()["speech_engine"] == "windows-sapi-grammar"
+        assert health.json()["welcome_message_service"] is True
         vendors = client.get("/vendors")
         assert vendors.status_code == 200
         assert vendors.json()[0]["vendor_id"] == "desolate-church"

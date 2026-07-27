@@ -29,6 +29,21 @@ class VoiceRequest(BaseModel):
     voice: str = "emma"
 
 
+class WelcomeMessageRequest(BaseModel):
+    player_key: str = Field(min_length=1, max_length=180)
+    player_name: str = Field(min_length=1, max_length=100)
+    world_day: int | None = Field(default=None, ge=0)
+    online_players: list[str] = Field(default_factory=list, max_length=32)
+    server_name: str | None = Field(default=None, max_length=100)
+
+
+class WelcomeMessage(BaseModel):
+    message: str = Field(min_length=1, max_length=240)
+    returning_player: bool
+    visit_number: int = Field(ge=1)
+    constructed_by: Literal["context-service"] = "context-service"
+
+
 class VendorStockPal(BaseModel):
     name: str
     base_price: int

@@ -14,16 +14,20 @@ from .models import (
     ShareVendorRequest,
     VendorLocation,
     VoiceRequest,
+    WelcomeMessage,
+    WelcomeMessageRequest,
 )
 from .rag import Companion
 from .transcription import ConfirmationTranscriber
 from .vendors import find_vendor, list_rare_targets, list_vendors, queue_vendor_share
 from .voice import NeuralVoice
+from .welcome import WelcomeMessageService
 
 settings = Settings()
 companion = Companion(settings)
 neural_voice = NeuralVoice(settings.voice_cache_path)
 confirmation_transcriber = ConfirmationTranscriber()
+welcome_message_service = WelcomeMessageService(companion.store)
 app = FastAPI(title="Palworld Local LLM Companion", version="0.2.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
@@ -57,7 +61,19 @@ async def health() -> dict[str, str | int | bool]:
         "live_context_configured": bool(
             settings.palworld_rest_url and settings.palworld_admin_password
         ),
+        "welcome_message_service": True,
     }
+
+
+@app.post("/internal/welcome-message", response_model=WelcomeMessage)
+async def construct_welcome_message(
+    welcome_request: WelcomeMessageRequest,
+    request: Request,
+) -> WelcomeMessage:
+    client_host = request.client.host if request.client else ""
+    if client_host not in {"127.0.0.1", "::1", "testclient"}:
+        raise HTTPException(status_code=403, detail="This endpoint is local only.")
+    return welcome_message_service.construct(welcome_request)
 
 
 @app.get("/vendors", response_model=list[VendorLocation])

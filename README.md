@@ -112,6 +112,20 @@ most available VRAM and cause severe in-game frame-time spikes.
 Open `http://127.0.0.1:8765/` for the Paldeck interface. The API issues a
 same-origin session cookie to that UI; `/ask` rejects requests without it.
 
+Keep the local API available for PAL COMMAND welcome messages even when Palworld
+is not running:
+
+```powershell
+.\scripts\Install-CompanionServiceAutoStart.ps1
+```
+
+This installs the `PAL COMMAND - Companion Service` logon task. Its supervisor
+restarts the loopback API after an unexpected exit. The local-only
+`POST /internal/welcome-message` endpoint constructs contextual join messages
+from the player name, server name, world day, online roster, and persistent visit
+history. PAL COMMAND remains responsible for detecting joins and broadcasting the
+returned message through Palworld.
+
 ### Index the installed game
 
 On Windows, the local importer extracts selected Palworld data tables using the

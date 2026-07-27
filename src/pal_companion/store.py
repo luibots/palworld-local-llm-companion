@@ -45,6 +45,17 @@ class VectorStore:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS player_welcomes (
+                    player_key TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    visit_count INTEGER NOT NULL,
+                    first_seen REAL NOT NULL,
+                    last_seen REAL NOT NULL
+                )
+                """
+            )
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path)
@@ -139,6 +150,43 @@ class VectorStore:
     def cached_answer_count(self) -> int:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM answer_cache").fetchone()[0])
+
+    def record_player_welcome(
+        self,
+        player_key: str,
+        display_name: str,
+        *,
+        timestamp: float | None = None,
+    ) -> tuple[int, float | None]:
+        now = time.time() if timestamp is None else timestamp
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT visit_count, last_seen FROM player_welcomes WHERE player_key = ?",
+                (player_key,),
+            ).fetchone()
+            if row:
+                visit_count = int(row[0]) + 1
+                previous_seen = float(row[1])
+                connection.execute(
+                    """
+                    UPDATE player_welcomes
+                    SET display_name = ?, visit_count = ?, last_seen = ?
+                    WHERE player_key = ?
+                    """,
+                    (display_name, visit_count, now, player_key),
+                )
+            else:
+                visit_count = 1
+                previous_seen = None
+                connection.execute(
+                    """
+                    INSERT INTO player_welcomes
+                        (player_key, display_name, visit_count, first_seen, last_seen)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (player_key, display_name, visit_count, now, now),
+                )
+        return visit_count, previous_seen
 
     def delete_stale_prefix(self, prefix: str, current_source_ids: set[str]) -> int:
         with self._connect() as connection:
