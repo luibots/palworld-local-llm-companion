@@ -243,7 +243,36 @@ local function execute_browser_script(script)
     return ok
 end
 
+local function storage_owner_key(model)
+    if not valid(model) then
+        return nil
+    end
+    local ok, owner_id = pcall(function()
+        local actor = model:GetActor()
+        if not valid(actor) then
+            return nil
+        end
+        local map_model = actor:GetModel()
+        if not valid(map_model) then
+            return nil
+        end
+        return guid_key(map_model:GetBuildPlayerUId_BP())
+    end)
+    if not ok then
+        return nil
+    end
+    return owner_id
+end
+
 local function storage_scan_json()
+    local controller = UEHelpers:GetPlayerController()
+    if not valid(controller) then
+        error("PlayerController is not ready")
+    end
+    local player_id = guid_key(controller:GetPlayerUId())
+    if not player_id or player_id == string.rep("0", 32) then
+        error("Current player ownership ID is unavailable")
+    end
     local storage_class = StaticFindObject("/Script/Pal.PalMapObjectItemStorageModel")
     if not valid(storage_class) then
         error("PalMapObjectItemStorageModel is unavailable")
@@ -253,6 +282,7 @@ local function storage_scan_json()
     local containers = {}
     local next_cache = {}
     local total_stacks = 0
+    local excluded_containers = 0
     for _, model in ipairs(models) do
         if #containers >= MAX_STORAGE_CONTAINERS or total_stacks >= MAX_STORAGE_STACKS then
             break
@@ -261,7 +291,11 @@ local function storage_scan_json()
             return valid(model) and model:IsA(storage_class)
         end)
         if model_ok and is_storage then
-            local ok, snapshot = pcall(function()
+            local owner_id = storage_owner_key(model)
+            if owner_id ~= player_id then
+                excluded_containers = excluded_containers + 1
+            else
+                local ok, snapshot = pcall(function()
                 local module = model:GetItemContainerModule()
                 if not valid(module) then
                     return nil
@@ -305,6 +339,7 @@ local function storage_scan_json()
                     container_id = container_id,
                     model_id = model_id,
                     base_id = base_id,
+                    owner_player_id = owner_id,
                     label = label,
                     x = location and location.X or 0.0,
                     y = location and location.Y or 0.0,
@@ -313,27 +348,34 @@ local function storage_scan_json()
                     container = container,
                     model = model
                 }
-            end)
-            if ok and snapshot then
-                next_cache[snapshot.container_id] = snapshot
-                total_stacks = total_stacks + #snapshot.items
-                table.insert(containers, snapshot)
+                end)
+                if ok and snapshot then
+                    next_cache[snapshot.container_id] = snapshot
+                    total_stacks = total_stacks + #snapshot.items
+                    table.insert(containers, snapshot)
+                end
             end
         end
     end
 
     storage_cache = next_cache
-    local encoded = {"{\"containers\":["}
+    local encoded = {string.format(
+        '{"player_id":"%s","excluded_container_count":%d,"containers":[',
+        player_id,
+        excluded_containers
+    )}
     for index, container in ipairs(containers) do
         if index > 1 then
             table.insert(encoded, ",")
         end
         table.insert(encoded, string.format(
             '{"container_id":"%s","model_id":"%s","base_id":"%s",' ..
+            '"owner_player_id":"%s",' ..
             '"label":"%s","x":%.2f,"y":%.2f,"z":%.2f,"items":[',
             container.container_id,
             container.model_id,
             container.base_id,
+            container.owner_player_id,
             json_escape(container.label),
             container.x,
             container.y,
@@ -355,8 +397,9 @@ local function storage_scan_json()
     end
     table.insert(encoded, "]}")
     log(string.format(
-        "Storage scan found %d chest(s) and %d occupied stack(s)",
+        "Storage scan found %d owned chest(s), excluded %d other chest(s), and %d occupied stack(s)",
         #containers,
+        excluded_containers,
         total_stacks
     ))
     return table.concat(encoded)
@@ -397,6 +440,10 @@ local function request_storage_moves(payload)
     if not valid(network_item) then
         error("Local item network component is unavailable")
     end
+    local player_id = guid_key(controller:GetPlayerUId())
+    if not player_id or player_id == string.rep("0", 32) then
+        error("Current player ownership ID is unavailable")
+    end
 
     local submitted = 0
     local rejected = 0
@@ -411,7 +458,11 @@ local function request_storage_moves(payload)
         end
         local target = storage_cache[segments[1] or ""]
         local froms = {}
-        if not target or target.label == "" or not valid(target.container) then
+        if not target
+            or target.label == ""
+            or target.owner_player_id ~= player_id
+            or storage_owner_key(target.model) ~= player_id
+            or not valid(target.container) then
             rejected = rejected + math.max(1, #segments - 1)
         else
             for index = 2, #segments do
@@ -426,6 +477,8 @@ local function request_storage_moves(payload)
                 local requested_count = tonumber(count_text)
                 local accepted = source
                     and source.label ~= ""
+                    and source.owner_player_id == player_id
+                    and storage_owner_key(source.model) == player_id
                     and source.base_id == target.base_id
                     and valid(source.container)
                     and slot_index

@@ -127,7 +127,7 @@ sequenceDiagram
 - Ollama runs locally. Prompts are not sent to a hosted model.
 - Palworld REST access is optional and read-only.
 - Storage Router is a separate confirmed write path. The client bridge revalidates
-  labeled, loaded source slots and labeled same-base destinations before Palworld's server
+  builder ownership, labeled loaded source slots, and labeled same-base destinations before Palworld's server
   accepts or rejects each replicated item request.
 - Server, Brave, and Discord credentials remain in local environment configuration.
 - `.env`, generated indexes, private exports, and server data are excluded from Git.
@@ -149,15 +149,15 @@ sequenceDiagram
     participant Game as Palworld Server
 
     Player->>Bridge: Press F4
-    Bridge->>Bridge: Scan loaded item-storage models
-    Bridge-->>UI: Labels, container IDs, and occupied slots
+    Bridge->>Bridge: Scan loaded storage and compare builder UID
+    Bridge-->>UI: Current player's owned chests only
     UI->>API: POST /storage/plan
     API->>LLM: Exact item IDs and allowed labeled targets
     LLM-->>API: Strict JSON routes
     API-->>UI: Validated move preview
     Player->>UI: Arm, review, and confirm
     UI->>Bridge: Bounded move command
-    Bridge->>Bridge: Revalidate labels, exact item, slot, count, and base
+    Bridge->>Bridge: Revalidate owner UID, labels, exact item, slot, count, and base
     Bridge->>Game: Replicated move request
     Game-->>Bridge: Server accepts or rejects operation
     Bridge-->>UI: Submission result and fresh scan

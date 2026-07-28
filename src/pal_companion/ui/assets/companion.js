@@ -382,7 +382,7 @@ function renderStorageChests(containers) {
   if (!containers.length) {
     const empty = document.createElement("div");
     empty.className = "storage-empty";
-    empty.textContent = "NO LOADED STORAGE CHESTS";
+    empty.textContent = "NO PLAYER-OWNED LOADED CHESTS";
     storageChestList.append(empty);
     return;
   }
@@ -534,10 +534,11 @@ window.palCompanionStorageSnapshot = (snapshot) => {
   currentStorageSnapshot = snapshot;
   renderStorageChests(snapshot.containers);
   const labeled = snapshot.containers.filter((container) => container.label).length;
-  storageMode.textContent = `${labeled} LABELED / ${snapshot.containers.length} LOADED`;
+  const excluded = Math.max(0, Number(snapshot.excluded_container_count) || 0);
+  storageMode.textContent = `${labeled} LABELED / ${snapshot.containers.length} YOURS`;
   storageStatus.textContent = labeled
-    ? "CHEST SNAPSHOT READY"
-    : "NAME DESTINATION CHESTS IN PALWORLD, THEN SCAN AGAIN";
+    ? `CHEST SNAPSHOT READY / ${excluded} OTHER-PLAYER CHEST${excluded === 1 ? "" : "S"} EXCLUDED`
+    : `NAME YOUR OWN CHESTS IN PALWORLD, THEN SCAN AGAIN / ${excluded} OTHER-PLAYER CHEST${excluded === 1 ? "" : "S"} EXCLUDED`;
   planStorageButton.disabled = !labeled;
   if (labeled) buildStoragePlan();
 };

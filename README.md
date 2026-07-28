@@ -194,12 +194,14 @@ models currently loaded by your client and sends their labels and stack metadata
 the local companion. Ollama maps item IDs to those labels; deterministic category
 rules remain available when the model is offline.
 
-Unlabeled chests are shown in the scan but excluded from the move plan. A chest
-label is the opt-in boundary for both sources and destinations, preventing unrelated
-guild storage from being swept into a plan.
+The bridge compares Palworld's replicated chest-builder UID with the current player's
+UID. Only chests built by that player can enter the snapshot; guild members' chests
+and unknown-owner chests fail closed before data reaches the planner. Unlabeled owned
+chests are shown in the scan but excluded from the move plan. A label is the second
+opt-in boundary for both sources and destinations.
 
 The UI previews every move. Applying requires a second confirmation. Immediately
-before submission, the UE4SS bridge verifies that each source slot still exists,
+before submission, the UE4SS bridge rechecks chest ownership and verifies each source slot still exists,
 contains the same item and at least the requested quantity, shares a base with the
 destination, and targets a labeled chest from the most recent scan. Each apply is limited to 32 stack
 moves and uses Palworld's replicated item-move request. The feature does not edit

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SourceDocument(BaseModel):
@@ -133,6 +133,7 @@ class StorageContainerSnapshot(BaseModel):
     container_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     model_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     base_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    owner_player_id: str = Field(pattern=r"^[0-9a-f]{32}$")
     label: str = Field(default="", max_length=80)
     x: float | None = None
     y: float | None = None
@@ -141,7 +142,18 @@ class StorageContainerSnapshot(BaseModel):
 
 
 class StorageSnapshotRequest(BaseModel):
+    player_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    excluded_container_count: int = Field(default=0, ge=0, le=4096)
     containers: list[StorageContainerSnapshot] = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def containers_belong_to_player(self) -> "StorageSnapshotRequest":
+        if any(
+            container.owner_player_id != self.player_id
+            for container in self.containers
+        ):
+            raise ValueError("Storage snapshots may contain only the current player's chests.")
+        return self
 
 
 class StorageMove(BaseModel):

@@ -161,11 +161,14 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         denied_storage = client.post(
             "/storage/plan",
             json={
+                "player_id": "d" * 32,
+                "excluded_container_count": 0,
                 "containers": [
                     {
                         "container_id": "a" * 32,
                         "model_id": "b" * 32,
                         "base_id": "c" * 32,
+                        "owner_player_id": "d" * 32,
                         "label": "Ore",
                         "items": [],
                     }

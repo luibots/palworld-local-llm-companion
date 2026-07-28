@@ -10,9 +10,10 @@ game's previous movement and camera input state; `Escape` provides an in-browser
 close path in addition to the `F2` toggle.
 
 Press `F4` to open the private Storage Router beta. It scans only loaded item-storage
-models, uses chest names as routing labels, ignores unlabeled storage, previews every
-stack move, and submits a confirmed plan through Palworld's replicated item-move
-request. It never edits saves.
+models built by the current player, uses chest names as routing labels, ignores
+unlabeled storage, previews every stack move, and submits a confirmed plan through
+Palworld's replicated item-move request. Other-player and unknown-owner chests fail
+closed. It never edits saves.
 
 This mod does not contain Ollama, credentials, game data, or server code. It only
 creates an Unreal UMG browser panel and points it at the loopback companion service.
