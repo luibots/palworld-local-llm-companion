@@ -8,9 +8,14 @@ local root_widget = nil
 local visible = false
 local last_marker_command = nil
 local last_close_command = nil
+local last_storage_command = nil
 local input_captured = false
 local previous_move_input_ignored = false
 local previous_look_input_ignored = false
+local storage_cache = {}
+local MAX_STORAGE_CONTAINERS = 32
+local MAX_STORAGE_STACKS = 512
+local MAX_STORAGE_MOVES = 32
 
 local function log(message)
     print(string.format("[%s] %s\n", MOD_NAME, message))
@@ -41,6 +46,52 @@ local function url_encode(value)
     return tostring(value):gsub("([^%w%-_%.~])", function(character)
         return string.format("%%%02X", string.byte(character))
     end)
+end
+
+local function json_escape(value)
+    return tostring(value or "")
+        :gsub("\\", "\\\\")
+        :gsub('"', '\\"')
+        :gsub("\b", "\\b")
+        :gsub("\f", "\\f")
+        :gsub("\n", "\\n")
+        :gsub("\r", "\\r")
+        :gsub("\t", "\\t")
+end
+
+local function string_value(value)
+    if value == nil then
+        return ""
+    end
+    local ok, converted = pcall(function()
+        return value:ToString()
+    end)
+    if ok and converted then
+        return tostring(converted)
+    end
+    return tostring(value)
+end
+
+local function guid_key(guid)
+    if not guid then
+        return nil
+    end
+    local ok, key = pcall(function()
+        local function uint32(value)
+            return value < 0 and value + 4294967296 or value
+        end
+        return string.format(
+            "%08x%08x%08x%08x",
+            uint32(guid.A),
+            uint32(guid.B),
+            uint32(guid.C),
+            uint32(guid.D)
+        )
+    end)
+    if not ok then
+        return nil
+    end
+    return key
 end
 
 local function companion_url(controller)
@@ -177,6 +228,279 @@ local function acknowledge_marker_placement(count)
     if not ok then
         log("Could not acknowledge marker placement: " .. tostring(message))
     end
+end
+
+local function execute_browser_script(script)
+    if not valid(browser_widget) then
+        return false
+    end
+    local ok, message = pcall(function()
+        browser_widget:ExecuteJavascript(script)
+    end)
+    if not ok then
+        log("Browser callback failed: " .. tostring(message))
+    end
+    return ok
+end
+
+local function storage_scan_json()
+    local storage_class = StaticFindObject("/Script/Pal.PalMapObjectItemStorageModel")
+    if not valid(storage_class) then
+        error("PalMapObjectItemStorageModel is unavailable")
+    end
+
+    local models = FindAllOf("PalMapObjectConcreteModelBase") or {}
+    local containers = {}
+    local next_cache = {}
+    local total_stacks = 0
+    for _, model in ipairs(models) do
+        if #containers >= MAX_STORAGE_CONTAINERS or total_stacks >= MAX_STORAGE_STACKS then
+            break
+        end
+        local model_ok, is_storage = pcall(function()
+            return valid(model) and model:IsA(storage_class)
+        end)
+        if model_ok and is_storage then
+            local ok, snapshot = pcall(function()
+                local module = model:GetItemContainerModule()
+                if not valid(module) then
+                    return nil
+                end
+                local container = module:GetContainer()
+                if not valid(container) then
+                    return nil
+                end
+                local container_id = guid_key(container:GetId().ID)
+                local model_id = guid_key(model:GetModelInstanceId())
+                local base_id = guid_key(model:GetBaseCampIdBelongTo())
+                if not container_id or not model_id or not base_id then
+                    return nil
+                end
+
+                local label = string_value(model:TryGetItemContainerOverrideName())
+                label = label:gsub("^%s+", ""):gsub("%s+$", "")
+                local transform = model:GetTransform()
+                local location = transform and transform.Translation or nil
+                local items = {}
+                local slot_count = math.min(container:Num(), 128)
+                for index = 0, slot_count - 1 do
+                    if total_stacks + #items >= MAX_STORAGE_STACKS then
+                        break
+                    end
+                    local slot = container:Get(index)
+                    if valid(slot) and not slot:IsEmpty() then
+                        local item_id = slot:GetItemId()
+                        local static_id = string_value(item_id.StaticId)
+                        local count = slot:GetStackCount()
+                        if static_id ~= "" and count > 0 then
+                            table.insert(items, {
+                                item_id = static_id,
+                                slot_index = index,
+                                count = count
+                            })
+                        end
+                    end
+                end
+                return {
+                    container_id = container_id,
+                    model_id = model_id,
+                    base_id = base_id,
+                    label = label,
+                    x = location and location.X or 0.0,
+                    y = location and location.Y or 0.0,
+                    z = location and location.Z or 0.0,
+                    items = items,
+                    container = container,
+                    model = model
+                }
+            end)
+            if ok and snapshot then
+                next_cache[snapshot.container_id] = snapshot
+                total_stacks = total_stacks + #snapshot.items
+                table.insert(containers, snapshot)
+            end
+        end
+    end
+
+    storage_cache = next_cache
+    local encoded = {"{\"containers\":["}
+    for index, container in ipairs(containers) do
+        if index > 1 then
+            table.insert(encoded, ",")
+        end
+        table.insert(encoded, string.format(
+            '{"container_id":"%s","model_id":"%s","base_id":"%s",' ..
+            '"label":"%s","x":%.2f,"y":%.2f,"z":%.2f,"items":[',
+            container.container_id,
+            container.model_id,
+            container.base_id,
+            json_escape(container.label),
+            container.x,
+            container.y,
+            container.z
+        ))
+        for item_index, item in ipairs(container.items) do
+            if item_index > 1 then
+                table.insert(encoded, ",")
+            end
+            table.insert(encoded, string.format(
+                '{"item_id":"%s","display_name":"%s","slot_index":%d,"count":%d}',
+                json_escape(item.item_id),
+                json_escape(item.item_id),
+                item.slot_index,
+                item.count
+            ))
+        end
+        table.insert(encoded, "]}")
+    end
+    table.insert(encoded, "]}")
+    log(string.format(
+        "Storage scan found %d chest(s) and %d occupied stack(s)",
+        #containers,
+        total_stacks
+    ))
+    return table.concat(encoded)
+end
+
+local function send_storage_snapshot()
+    local ok, payload = pcall(storage_scan_json)
+    if not ok then
+        execute_browser_script(string.format(
+            "window.palCompanionStorageError && " ..
+            "window.palCompanionStorageError(\"%s\");",
+            json_escape(payload)
+        ))
+        log("Storage scan failed: " .. tostring(payload))
+        return
+    end
+    execute_browser_script(
+        "window.palCompanionStorageSnapshot && " ..
+        "window.palCompanionStorageSnapshot(" .. payload .. ");"
+    )
+end
+
+local function request_storage_moves(payload)
+    local controller = UEHelpers:GetPlayerController()
+    if not valid(controller) then
+        error("PlayerController is not ready")
+    end
+    local utility = StaticFindObject("/Script/Pal.Default__PalUtility")
+    local guid_library = StaticFindObject("/Script/Engine.Default__KismetGuidLibrary")
+    if not valid(utility) or not valid(guid_library) then
+        error("Palworld storage networking is unavailable")
+    end
+    local transmitter = utility:GetNetworkTransmitter(controller)
+    if not valid(transmitter) then
+        error("Local network transmitter is unavailable")
+    end
+    local network_item = transmitter:GetItem()
+    if not valid(network_item) then
+        error("Local item network component is unavailable")
+    end
+
+    local submitted = 0
+    local rejected = 0
+    local target_count = 0
+    for target_group in payload:gmatch("[^;]+") do
+        if submitted >= MAX_STORAGE_MOVES then
+            break
+        end
+        local segments = {}
+        for segment in target_group:gmatch("[^~]+") do
+            table.insert(segments, segment)
+        end
+        local target = storage_cache[segments[1] or ""]
+        local froms = {}
+        if not target or target.label == "" or not valid(target.container) then
+            rejected = rejected + math.max(1, #segments - 1)
+        else
+            for index = 2, #segments do
+                if submitted + #froms >= MAX_STORAGE_MOVES then
+                    break
+                end
+                local source_id, slot_index_text, count_text = segments[index]:match(
+                    "^([0-9a-f]+),(%d+),(%d+)$"
+                )
+                local source = source_id and storage_cache[source_id] or nil
+                local slot_index = tonumber(slot_index_text)
+                local requested_count = tonumber(count_text)
+                local accepted = source
+                    and source.label ~= ""
+                    and source.base_id == target.base_id
+                    and valid(source.container)
+                    and slot_index
+                    and requested_count
+                    and slot_index >= 0
+                    and requested_count > 0
+                if accepted then
+                    local slot = source.container:Get(slot_index)
+                    local scanned_item = nil
+                    for _, item in ipairs(source.items) do
+                        if item.slot_index == slot_index then
+                            scanned_item = item
+                            break
+                        end
+                    end
+                    accepted = valid(slot)
+                        and not slot:IsEmpty()
+                        and scanned_item
+                        and string_value(slot:GetItemId().StaticId) == scanned_item.item_id
+                        and slot:GetStackCount() >= requested_count
+                    if accepted then
+                        table.insert(froms, {
+                            SlotId = slot:GetSlotId(),
+                            Num = requested_count
+                        })
+                    end
+                end
+                if not accepted then
+                    rejected = rejected + 1
+                end
+            end
+            if #froms > 0 then
+                network_item:RequestMoveToContainer_ToServer(
+                    guid_library:NewGuid(),
+                    target.container:GetId(),
+                    froms
+                )
+                submitted = submitted + #froms
+                target_count = target_count + 1
+            end
+        end
+    end
+    log(string.format(
+        "Storage organizer submitted %d move(s) to %d chest(s); %d rejected",
+        submitted,
+        target_count,
+        rejected
+    ))
+    execute_browser_script(string.format(
+        "window.palCompanionStorageSubmitted && " ..
+        "window.palCompanionStorageSubmitted(%d,%d);",
+        submitted,
+        rejected
+    ))
+end
+
+local function process_storage_command(command)
+    local _, action, payload = command:match("^([^;]+);([^;]+);?(.*)$")
+    ExecuteInGameThread(function()
+        if action == "scan" then
+            send_storage_snapshot()
+            return
+        end
+        if action == "execute" and payload and payload ~= "" then
+            local ok, message = pcall(request_storage_moves, payload)
+            if not ok then
+                execute_browser_script(string.format(
+                    "window.palCompanionStorageError && " ..
+                    "window.palCompanionStorageError(\"%s\");",
+                    json_escape(message)
+                ))
+                log("Storage apply failed: " .. tostring(message))
+            end
+        end
+    end)
 end
 
 local function process_marker_command(command)
@@ -320,6 +644,24 @@ local function open_vendor_directory()
     end)
 end
 
+local function open_storage_organizer()
+    ExecuteInGameThread(function()
+        local controller = UEHelpers:GetPlayerController()
+        if not valid(controller) then
+            log("PlayerController is not ready")
+            return
+        end
+
+        local url = companion_url(controller) .. "&view=organizer"
+        local ok, message = pcall(show_overlay, controller, url)
+        if not ok then
+            log("Storage organizer failed: " .. tostring(message))
+            return
+        end
+        log("Storage organizer opened")
+    end)
+end
+
 local function close_overlay()
     local controller = UEHelpers:GetPlayerController()
     if not valid(controller) then
@@ -335,6 +677,7 @@ end
 
 RegisterKeyBind(Key.F2, toggle_overlay)
 RegisterKeyBind(Key.F3, open_vendor_directory)
+RegisterKeyBind(Key.F4, open_storage_organizer)
 
 LoopAsync(250, function()
     if not valid(browser_widget) then
@@ -360,7 +703,12 @@ LoopAsync(250, function()
             close_overlay()
         end)
     end
+    local storage_command = tostring(url):match("#palstorage=([^#]+)")
+    if storage_command and storage_command ~= last_storage_command then
+        last_storage_command = storage_command
+        process_storage_command(storage_command)
+    end
     return false
 end)
 
-log("Loaded. Press F2 for Pal Companion or F3 for verified vendors.")
+log("Loaded. F2 companion, F3 vendors, F4 storage organizer.")

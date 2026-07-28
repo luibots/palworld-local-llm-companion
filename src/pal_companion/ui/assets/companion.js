@@ -22,12 +22,25 @@ const status = document.querySelector("#status");
 const statusText = document.querySelector("#statusText");
 const indexCount = document.querySelector("#indexCount");
 const vendorButton = document.querySelector("#vendorButton");
+const storageButton = document.querySelector("#storageButton");
 const vendorState = document.querySelector("#vendorState");
 const vendorList = document.querySelector("#vendorList");
 const vendorStatus = document.querySelector("#vendorStatus");
 const vendorProximity = document.querySelector("#vendorProximity");
 const closeVendorsButton = document.querySelector("#closeVendorsButton");
 const rareTargetList = document.querySelector("#rareTargetList");
+const storageState = document.querySelector("#storageState");
+const storageMode = document.querySelector("#storageMode");
+const closeStorageButton = document.querySelector("#closeStorageButton");
+const scanStorageButton = document.querySelector("#scanStorageButton");
+const planStorageButton = document.querySelector("#planStorageButton");
+const applyStorageButton = document.querySelector("#applyStorageButton");
+const storageChestCount = document.querySelector("#storageChestCount");
+const storageStackCount = document.querySelector("#storageStackCount");
+const storageMoveCount = document.querySelector("#storageMoveCount");
+const storageChestList = document.querySelector("#storageChestList");
+const storagePlanList = document.querySelector("#storagePlanList");
+const storageStatus = document.querySelector("#storageStatus");
 const historyRoot = document.querySelector("#history");
 const emptyState = document.querySelector("#emptyState");
 const loadingState = document.querySelector("#loadingState");
@@ -85,6 +98,9 @@ let markerListening = false;
 let markerListenAbortController = null;
 let localSpeechReady = false;
 let vendorsLoaded = false;
+let currentStorageSnapshot = null;
+let currentStoragePlan = null;
+let storageApplyArmed = false;
 const markerChime = new Audio("/assets/marker-chime.mp3");
 markerChime.preload = "auto";
 
@@ -114,7 +130,7 @@ function historyAppearance(text) {
 }
 
 function show(target) {
-  [emptyState, loadingState, vendorState, answerState, errorState].forEach((item) => {
+  [emptyState, loadingState, vendorState, storageState, answerState, errorState].forEach((item) => {
     item.hidden = item !== target;
   });
 }
@@ -349,6 +365,198 @@ async function openVendorDirectory() {
 }
 
 window.palCompanionOpenVendors = openVendorDirectory;
+
+function resetStorageApply() {
+  storageApplyArmed = false;
+  applyStorageButton.textContent = currentStoragePlan?.can_execute
+    ? "ARM APPLY"
+    : "REVIEW FIRST";
+}
+
+function renderStorageChests(containers) {
+  storageChestList.replaceChildren();
+  storageChestCount.textContent = String(containers.length);
+  const stackCount = containers.reduce((total, container) => total + container.items.length, 0);
+  storageStackCount.textContent = String(stackCount);
+
+  if (!containers.length) {
+    const empty = document.createElement("div");
+    empty.className = "storage-empty";
+    empty.textContent = "NO LOADED STORAGE CHESTS";
+    storageChestList.append(empty);
+    return;
+  }
+
+  containers.forEach((container, index) => {
+    const row = document.createElement("div");
+    row.className = `storage-chest${container.label ? " labeled" : ""}`;
+    const identity = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = container.label || `UNLABELED CHEST ${index + 1}`;
+    const role = document.createElement("span");
+    role.textContent = container.label ? "ORGANIZER ENABLED" : "IGNORED";
+    identity.append(name, document.createElement("br"), role);
+    const count = document.createElement("span");
+    count.textContent = `${container.items.length} STACK${container.items.length === 1 ? "" : "S"}`;
+    row.append(identity, count);
+    storageChestList.append(row);
+  });
+}
+
+function renderStoragePlan(plan) {
+  currentStoragePlan = plan;
+  storagePlanList.replaceChildren();
+  storageMoveCount.textContent = String(plan.moves.length);
+  storageMode.textContent =
+    plan.planner === "local-llm" ? "LOCAL AI PLAN" : "LABEL RULE PLAN";
+  plan.moves.forEach((move) => {
+    const row = document.createElement("div");
+    row.className = `storage-move ${move.confidence}`;
+    row.title = move.reason;
+    const item = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = move.display_name;
+    const count = document.createElement("span");
+    count.textContent = `${move.count.toLocaleString()} / SLOT ${move.source_slot + 1}`;
+    item.append(name, document.createElement("br"), count);
+    const arrow = document.createElement("span");
+    arrow.className = "storage-arrow";
+    arrow.textContent = ">";
+    const target = document.createElement("strong");
+    target.textContent = move.target_label;
+    row.append(item, arrow, target);
+    storagePlanList.append(row);
+  });
+  if (!plan.moves.length) {
+    const empty = document.createElement("div");
+    empty.className = "storage-empty";
+    empty.textContent = "NO STACK MOVES REQUIRED";
+    storagePlanList.append(empty);
+  }
+
+  planStorageButton.disabled = !currentStorageSnapshot;
+  applyStorageButton.disabled = !gameClient || !plan.can_execute;
+  resetStorageApply();
+  const warnings = [...(plan.warnings || [])];
+  if (plan.unmapped_items?.length) {
+    warnings.push(`${plan.unmapped_items.length} ITEM TYPE(S) LEFT IN PLACE`);
+  }
+  storageStatus.textContent = [plan.summary, ...warnings].join(" / ").toUpperCase();
+}
+
+async function buildStoragePlan() {
+  if (!currentStorageSnapshot) return;
+  planStorageButton.disabled = true;
+  applyStorageButton.disabled = true;
+  storageMode.textContent = "LOCAL AI THINKING";
+  storageStatus.textContent = "BUILDING VALIDATED MOVE PLAN";
+  try {
+    const response = await fetch("/storage/plan", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(currentStorageSnapshot),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || `Storage plan failed (${response.status})`);
+    }
+    renderStoragePlan(data);
+  } catch (error) {
+    currentStoragePlan = null;
+    storageMode.textContent = "PLAN FAILED";
+    storageStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "STORAGE PLAN UNAVAILABLE";
+    planStorageButton.disabled = false;
+  }
+}
+
+function requestStorageScan() {
+  show(storageState);
+  currentStorageSnapshot = null;
+  currentStoragePlan = null;
+  resetStorageApply();
+  storageMoveCount.textContent = "0";
+  storagePlanList.replaceChildren();
+  planStorageButton.disabled = true;
+  applyStorageButton.disabled = true;
+  if (!gameClient) {
+    storageMode.textContent = "IN-GAME CLIENT REQUIRED";
+    storageStatus.textContent = "OPEN STORAGE ROUTER WITH F4 IN PALWORLD";
+    return;
+  }
+  storageMode.textContent = "SCANNING LOADED CHESTS";
+  storageStatus.textContent = "READ-ONLY CLIENT SCAN RUNNING";
+  window.location.hash = `palstorage=${Date.now()};scan`;
+}
+
+function openStorageOrganizer() {
+  stopMarkerListening();
+  stopVoice("VOICE READY");
+  show(storageState);
+  if (!currentStorageSnapshot) requestStorageScan();
+}
+
+function storageExecutionCommand(moves) {
+  const groups = new Map();
+  moves.slice(0, 32).forEach((move) => {
+    if (!groups.has(move.target_container_id)) groups.set(move.target_container_id, []);
+    groups
+      .get(move.target_container_id)
+      .push(`${move.source_container_id},${move.source_slot},${move.count}`);
+  });
+  return [...groups.entries()]
+    .map(([target, sources]) => `${target}~${sources.join("~")}`)
+    .join(";");
+}
+
+function applyStoragePlan() {
+  if (!currentStoragePlan?.can_execute || !gameClient) return;
+  if (!storageApplyArmed) {
+    storageApplyArmed = true;
+    applyStorageButton.textContent = `CONFIRM ${Math.min(32, currentStoragePlan.moves.length)} MOVES`;
+    storageStatus.textContent = "REVIEW THE MOVE LIST, THEN CONFIRM APPLY";
+    return;
+  }
+  const payload = storageExecutionCommand(currentStoragePlan.moves);
+  if (!payload) return;
+  applyStorageButton.disabled = true;
+  storageMode.textContent = "SUBMITTING TO PALWORLD";
+  storageStatus.textContent = "SOURCE STACKS ARE BEING REVALIDATED";
+  window.location.hash = `palstorage=${Date.now()};execute;${payload}`;
+}
+
+window.palCompanionStorageSnapshot = (snapshot) => {
+  if (!snapshot || !Array.isArray(snapshot.containers)) {
+    window.palCompanionStorageError("Malformed storage snapshot.");
+    return;
+  }
+  currentStorageSnapshot = snapshot;
+  renderStorageChests(snapshot.containers);
+  const labeled = snapshot.containers.filter((container) => container.label).length;
+  storageMode.textContent = `${labeled} LABELED / ${snapshot.containers.length} LOADED`;
+  storageStatus.textContent = labeled
+    ? "CHEST SNAPSHOT READY"
+    : "NAME DESTINATION CHESTS IN PALWORLD, THEN SCAN AGAIN";
+  planStorageButton.disabled = !labeled;
+  if (labeled) buildStoragePlan();
+};
+
+window.palCompanionStorageSubmitted = (submitted, rejected) => {
+  const accepted = Math.max(0, Number(submitted) || 0);
+  const denied = Math.max(0, Number(rejected) || 0);
+  storageMode.textContent = "PALWORLD REQUEST SENT";
+  storageStatus.textContent =
+    `${accepted} MOVE${accepted === 1 ? "" : "S"} SUBMITTED` +
+    (denied ? ` / ${denied} REJECTED DURING REVALIDATION` : "");
+  window.setTimeout(requestStorageScan, 1400);
+};
+
+window.palCompanionStorageError = (message) => {
+  storageMode.textContent = "STORAGE BRIDGE ERROR";
+  storageStatus.textContent = String(message || "Storage bridge unavailable").toUpperCase();
+  scanStorageButton.disabled = false;
+};
 
 function renderHistory() {
   historyRoot.replaceChildren();
@@ -876,7 +1084,12 @@ confirmMarkersButton.addEventListener("click", () => finishMarkerPrompt(true));
 declineMarkersButton.addEventListener("click", () => finishMarkerPrompt(false));
 placeTargetButton.addEventListener("click", placeManualTarget);
 vendorButton.addEventListener("click", openVendorDirectory);
+storageButton.addEventListener("click", openStorageOrganizer);
 closeVendorsButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
+closeStorageButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
+scanStorageButton.addEventListener("click", requestStorageScan);
+planStorageButton.addEventListener("click", buildStoragePlan);
+applyStorageButton.addEventListener("click", applyStoragePlan);
 document.addEventListener("keydown", (event) => {
   if (gameClient && event.key === "Escape") {
     event.preventDefault();
@@ -887,6 +1100,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "F3") {
     event.preventDefault();
     openVendorDirectory();
+  }
+  if (event.key === "F4") {
+    event.preventDefault();
+    openStorageOrganizer();
   }
 });
 [targetX, targetY].forEach((input) => {
@@ -901,4 +1118,5 @@ document.addEventListener("keydown", (event) => {
 renderHistory();
 checkHealth();
 if (queryParams.get("view") === "vendors") openVendorDirectory();
+if (queryParams.get("view") === "organizer") openStorageOrganizer();
 window.setInterval(checkHealth, 15000);

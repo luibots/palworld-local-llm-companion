@@ -784,6 +784,219 @@ input[type="text"],
   line-height: 1.45;
 }
 
+.storage-state {
+  min-height: 100%;
+  transform-origin: 58% 18%;
+  animation: hud-pop 320ms cubic-bezier(0.18, 0.9, 0.25, 1.2);
+}
+
+.storage-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #59636f;
+  padding-bottom: 13px;
+}
+
+.storage-head .section-label {
+  display: inline-block;
+  border-left: 5px solid var(--green);
+  padding: 5px 10px;
+  background: #2a3039;
+  font-size: 11px;
+}
+
+.storage-head h2 {
+  margin-top: 8px;
+  font-family: "Arial Black", "Segoe UI", sans-serif;
+  font-size: 20px;
+  letter-spacing: 0;
+  -webkit-text-stroke: 0.7px #07090c;
+  text-shadow: var(--shadow-text);
+}
+
+.storage-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storage-mode {
+  border-left: 4px solid var(--cyan);
+  padding: 7px 9px;
+  background: #25313a;
+  color: var(--cyan);
+  font-size: 10px;
+  font-weight: 900;
+  text-shadow: 0 1px 1px #000;
+}
+
+.storage-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.storage-action {
+  min-height: 34px;
+  border: 1px solid #828d98;
+  border-left: 5px solid var(--cyan);
+  border-radius: 5px;
+  padding: 0 13px;
+  background: #303741;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 950;
+  text-shadow: var(--shadow-text);
+  cursor: pointer;
+}
+
+.storage-action.primary {
+  border-color: #ffe6a8;
+  border-left-color: #fff5d8;
+  background: var(--gold);
+  color: #171107;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.36);
+}
+
+.storage-action.danger {
+  border-left-color: var(--red);
+}
+
+.storage-action:hover:not(:disabled),
+.storage-action:focus-visible:not(:disabled) {
+  border-color: #fff;
+  outline: none;
+  background: #48515d;
+  color: #fff;
+}
+
+.storage-action.primary:hover:not(:disabled) {
+  background: var(--gold-bright);
+  color: #171107;
+}
+
+.storage-action:disabled {
+  cursor: default;
+  filter: grayscale(0.8);
+  opacity: 0.4;
+}
+
+.storage-metrics {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.storage-metrics span {
+  border: 1px solid #57616c;
+  border-radius: 5px;
+  padding: 6px 9px;
+  background: #242a32;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.storage-metrics b {
+  color: var(--gold-bright);
+}
+
+.storage-layout {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.85fr) minmax(280px, 1.5fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.storage-layout > div {
+  min-width: 0;
+}
+
+.storage-chest-list,
+.storage-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.storage-chest,
+.storage-move {
+  display: grid;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid #46505a;
+  border-left: 5px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 9px;
+  background: #232931;
+}
+
+.storage-chest {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.storage-chest.labeled {
+  border-left-color: var(--green);
+}
+
+.storage-chest strong,
+.storage-move strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 11px;
+  text-shadow: 0 1px 1px #000;
+}
+
+.storage-chest span,
+.storage-move span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.storage-move {
+  grid-template-columns: minmax(0, 1fr) auto minmax(90px, 0.65fr);
+  gap: 9px;
+}
+
+.storage-move.high {
+  border-left-color: var(--green);
+}
+
+.storage-move.medium {
+  border-left-color: var(--gold);
+}
+
+.storage-move .storage-arrow {
+  color: var(--cyan);
+  font-size: 15px;
+}
+
+.storage-empty {
+  min-height: 42px;
+  border: 1px dashed #59636f;
+  border-radius: 6px;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.storage-status {
+  min-height: 18px;
+  margin-top: 10px;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 900;
+  text-shadow: 0 1px 1px #000;
+}
+
 .vendor-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1485,7 +1698,12 @@ footer span:last-child {
     grid-template-columns: 1fr;
   }
 
-  .vendor-head-actions {
+  .storage-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .vendor-head-actions,
+  .storage-head-actions {
     align-items: flex-end;
     flex-direction: column-reverse;
   }

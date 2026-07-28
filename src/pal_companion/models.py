@@ -120,3 +120,47 @@ class Answer(BaseModel):
     sources: list[RetrievedSource]
     coordinates: list[MapMarker] = Field(default_factory=list)
     cached: bool = False
+
+
+class StorageItemStack(BaseModel):
+    item_id: str = Field(min_length=1, max_length=120)
+    display_name: str | None = Field(default=None, max_length=160)
+    slot_index: int = Field(ge=0, le=255)
+    count: int = Field(ge=1, le=999_999)
+
+
+class StorageContainerSnapshot(BaseModel):
+    container_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    model_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    base_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    label: str = Field(default="", max_length=80)
+    x: float | None = None
+    y: float | None = None
+    z: float | None = None
+    items: list[StorageItemStack] = Field(default_factory=list, max_length=128)
+
+
+class StorageSnapshotRequest(BaseModel):
+    containers: list[StorageContainerSnapshot] = Field(min_length=1, max_length=64)
+
+
+class StorageMove(BaseModel):
+    source_container_id: str
+    source_slot: int
+    item_id: str
+    display_name: str
+    count: int
+    target_container_id: str
+    target_label: str
+    reason: str
+    confidence: Literal["high", "medium"]
+
+
+class StoragePlan(BaseModel):
+    plan_id: str
+    summary: str
+    planner: Literal["local-llm", "deterministic"]
+    moves: list[StorageMove]
+    unmapped_items: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    can_execute: bool = False

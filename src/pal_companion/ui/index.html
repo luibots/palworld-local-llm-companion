@@ -17,6 +17,9 @@
           </div>
         </div>
         <div class="topbar-actions">
+          <button id="storageButton" class="nav-button storage-nav" type="button">
+            STORAGE <kbd>F4</kbd>
+          </button>
           <button id="vendorButton" class="nav-button" type="button">
             VENDORS <kbd>F3</kbd>
           </button>
@@ -141,6 +144,46 @@
             <p id="vendorStatus" class="vendor-status"></p>
           </section>
 
+          <section id="storageState" class="storage-state" hidden>
+            <div class="storage-head">
+              <div>
+                <span class="section-label">BASE STORAGE ROUTER</span>
+                <h2>LABELED CHESTS</h2>
+              </div>
+              <div class="storage-head-actions">
+                <span id="storageMode" class="storage-mode">CLIENT SCAN REQUIRED</span>
+                <button id="closeStorageButton" class="tool-button" type="button">BACK</button>
+              </div>
+            </div>
+            <div class="storage-toolbar">
+              <button id="scanStorageButton" class="storage-action primary" type="button">
+                SCAN LOADED CHESTS
+              </button>
+              <button id="planStorageButton" class="storage-action" type="button" disabled>
+                BUILD PLAN
+              </button>
+              <button id="applyStorageButton" class="storage-action danger" type="button" disabled>
+                REVIEW FIRST
+              </button>
+            </div>
+            <div class="storage-metrics">
+              <span><b id="storageChestCount">0</b> CHESTS</span>
+              <span><b id="storageStackCount">0</b> STACKS</span>
+              <span><b id="storageMoveCount">0</b> MOVES</span>
+            </div>
+            <div class="storage-layout">
+              <div>
+                <span class="section-label">CHEST LABELS</span>
+                <div id="storageChestList" class="storage-chest-list"></div>
+              </div>
+              <div>
+                <span class="section-label">MOVE PREVIEW</span>
+                <div id="storagePlanList" class="storage-plan-list"></div>
+              </div>
+            </div>
+            <p id="storageStatus" class="storage-status">OPEN IN GAME AND SCAN</p>
+          </section>
+
           <div id="answerState" hidden>
             <div class="answer-head">
               <span class="section-label">ANSWER</span>
@@ -185,7 +228,7 @@
       </section>
 
       <footer>
-        <span>F2 COMPANION / F3 VENDORS</span>
+        <span>F2 COMPANION / F3 VENDORS / F4 STORAGE</span>
         <span>FACTS FROM DATA. STRATEGY FROM AI.</span>
         <span id="indexCount">0 SOURCES INDEXED</span>
       </footer>

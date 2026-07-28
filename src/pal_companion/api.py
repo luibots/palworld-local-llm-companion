@@ -12,12 +12,15 @@ from .models import (
     AskRequest,
     RarePalTarget,
     ShareVendorRequest,
+    StoragePlan,
+    StorageSnapshotRequest,
     VendorLocation,
     VoiceRequest,
     WelcomeMessage,
     WelcomeMessageRequest,
 )
 from .rag import Companion
+from .storage import StorageOrganizer
 from .transcription import ConfirmationTranscriber
 from .vendors import find_vendor, list_rare_targets, list_vendors, queue_vendor_share
 from .voice import NeuralVoice
@@ -28,7 +31,8 @@ companion = Companion(settings)
 neural_voice = NeuralVoice(settings.voice_cache_path)
 confirmation_transcriber = ConfirmationTranscriber()
 welcome_message_service = WelcomeMessageService(companion.store)
-app = FastAPI(title="Palworld Local LLM Companion", version="0.2.0")
+storage_organizer = StorageOrganizer(companion.ollama)
+app = FastAPI(title="Palworld Local LLM Companion", version="0.3.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
 app.mount("/assets", StaticFiles(directory=web_root / "assets"), name="assets")
@@ -62,6 +66,7 @@ async def health() -> dict[str, str | int | bool]:
             settings.palworld_rest_url and settings.palworld_admin_password
         ),
         "welcome_message_service": True,
+        "storage_organizer": True,
     }
 
 
@@ -97,6 +102,16 @@ async def rare_targets(
     if not secrets.compare_digest(pal_companion_session or "", session_token):
         raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
     return list_rare_targets()
+
+
+@app.post("/storage/plan", response_model=StoragePlan)
+async def plan_storage(
+    snapshot: StorageSnapshotRequest,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> StoragePlan:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    return await storage_organizer.plan(snapshot)
 
 
 @app.post("/guild/share-vendor")

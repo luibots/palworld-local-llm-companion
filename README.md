@@ -55,6 +55,7 @@ speech AI model. It only recognizes the approved yes/no confirmation phrases.
 - Discord `/askpal`
 - In-game `F2` Paldeck overlay through the client-only UE4SS UI prototype
 - In-game `F3` verified vendor directory with native markers and guild sharing
+- In-game `F4` AI Storage Router for labeled, loaded base chests
 
 ## Architecture
 
@@ -176,14 +177,33 @@ The UI prototype is client-only. It does not require a server mod or server rest
    ```
 
 4. Start the companion locally with `pal-companion api`.
-5. Launch Palworld and enter a world. Press `F2` for the companion or `F3` for
-   the instant vendor directory.
+5. Launch Palworld and enter a world. Press `F2` for the companion, `F3` for
+   the instant vendor directory, or `F4` for Storage Router.
 
 The vendor directory is local catalog data and opens without waiting for Ollama.
 When authorized live player coordinates are available, it sorts verified brokers by
 straight-line map distance. `MARK ROUTE` places a native person marker through the
 client bridge. `GUILD` queues a fixed vendor card for the PAL COMMAND Discord bot;
 it does not allow arbitrary browser-authored announcements.
+
+### Storage Router beta
+
+Name participating chests in Palworld with labels such as `Inbox`, `Ore and coal`, `Food`,
+`Pal materials`, or `Ammo`, then press `F4`. Storage Router scans item-storage
+models currently loaded by your client and sends their labels and stack metadata to
+the local companion. Ollama maps item IDs to those labels; deterministic category
+rules remain available when the model is offline.
+
+Unlabeled chests are shown in the scan but excluded from the move plan. A chest
+label is the opt-in boundary for both sources and destinations, preventing unrelated
+guild storage from being swept into a plan.
+
+The UI previews every move. Applying requires a second confirmation. Immediately
+before submission, the UE4SS bridge verifies that each source slot still exists,
+contains the same item and at least the requested quantity, shares a base with the
+destination, and targets a labeled chest from the most recent scan. Each apply is limited to 32 stack
+moves and uses Palworld's replicated item-move request. The feature does not edit
+save files, move items in the background, or route to unloaded containers.
 
 Do not install a second manual UE4SS copy alongside the Workshop version. The installer
 refuses to modify Palworld until the official `Mods\NativeMods\UE4SS` path exists.
@@ -216,8 +236,9 @@ schemas, and tiny clearly labeled examples instead.
 ## Integration boundaries
 
 - Live Palworld calls are read-only.
-- The optional UI mod uses UE4SS to create a UMG browser panel; Ollama and
-  credentials remain in the separate local process.
+- The optional UI mod creates a UMG browser panel and handles confirmed local map
+  markers and storage moves. Storage writes use Palworld's server-validated item RPC.
+- Ollama and credentials remain in the separate local process.
 - Credentials stay in `.env`, which Git ignores.
 - Web claims remain labeled and linked; they do not silently override game-table data.
 - Server and player information must not be submitted to public issue reports.
@@ -225,8 +246,9 @@ schemas, and tiny clearly labeled examples instead.
 ## Status
 
 The first vertical slice is implemented: Ollama chat/embeddings, SQLite vector retrieval,
-live player coordinates, Brave search, FastAPI, Discord, CLI, unit tests, and an in-game
-UE4SS Paldeck prototype. The Windows importer builds a private index from installed
+live player coordinates, Brave search, FastAPI, Discord, CLI, unit tests, an in-game
+UE4SS Paldeck, and the guarded labeled-chest Storage Router beta. The Windows importer
+builds a private index from installed
 Palworld Pal, item, recipe, drop, wild-spawn, build-object, and technology tables.
 Attributed 1.0 route guides provide precise resource coordinates while direct static
 resource-node extraction and Workshop packaging remain future work.

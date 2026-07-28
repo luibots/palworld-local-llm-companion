@@ -135,6 +135,7 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert health.json()["voice_engine"] == "edge-neural"
         assert health.json()["speech_engine"] == "windows-sapi-grammar"
         assert health.json()["welcome_message_service"] is True
+        assert health.json()["storage_organizer"] is True
         vendors = client.get("/vendors")
         assert vendors.status_code == 200
         assert vendors.json()[0]["vendor_id"] == "desolate-church"
@@ -157,6 +158,21 @@ def test_ui_issues_session_cookie_and_protects_ask() -> None:
         assert denied_listen.status_code == 403
         denied_vendors = client.get("/vendors")
         assert denied_vendors.status_code == 403
+        denied_storage = client.post(
+            "/storage/plan",
+            json={
+                "containers": [
+                    {
+                        "container_id": "a" * 32,
+                        "model_id": "b" * 32,
+                        "base_id": "c" * 32,
+                        "label": "Ore",
+                        "items": [],
+                    }
+                ]
+            },
+        )
+        assert denied_storage.status_code == 403
 
 
 def test_confirmation_transcription_endpoint_is_session_protected(
