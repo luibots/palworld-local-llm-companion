@@ -4,6 +4,11 @@ Local-first AI assistance for Palworld, grounded in real game data instead of gu
 It combines Ollama, vector retrieval over user-provided game-data exports, optional
 live server context, and web search for current guides and strategies.
 
+![Pal Companion AI Storage Router](docs/screenshots/storage-router.jpg)
+
+The screenshot uses the inert `?demo=storage` documentation fixture. It demonstrates
+the review flow and ownership exclusions without reading or moving live game items.
+
 ## What it answers
 
 - Where a Pal, material, dungeon, or resource can be found

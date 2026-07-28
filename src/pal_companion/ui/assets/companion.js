@@ -559,6 +559,118 @@ window.palCompanionStorageError = (message) => {
   scanStorageButton.disabled = false;
 };
 
+function renderStorageScreenshotDemo() {
+  history.splice(
+    0,
+    history.length,
+    "Where is the best coal route for level 37?",
+    "Which rare Pals can my party safely capture?",
+    "Mark the nearest Pal Merchant on my map.",
+    "What materials are missing for my next build?",
+  );
+  renderHistory();
+  const inbox = "a".repeat(32);
+  const mining = "b".repeat(32);
+  const food = "c".repeat(32);
+  const palMaterials = "d".repeat(32);
+  const baseId = "e".repeat(32);
+  const playerId = "f".repeat(32);
+  const containers = [
+    {
+      container_id: inbox,
+      model_id: "1".repeat(32),
+      base_id: baseId,
+      owner_player_id: playerId,
+      label: "Inbox",
+      items: [
+        { item_id: "Coal", display_name: "Coal", slot_index: 0, count: 184 },
+        { item_id: "RedBerries", display_name: "Red Berries", slot_index: 1, count: 320 },
+        { item_id: "Leather", display_name: "Leather", slot_index: 2, count: 76 },
+      ],
+    },
+    {
+      container_id: mining,
+      model_id: "2".repeat(32),
+      base_id: baseId,
+      owner_player_id: playerId,
+      label: "Ore and coal",
+      items: [{ item_id: "PalMetalIngot", display_name: "Pal Metal Ingot", slot_index: 0, count: 42 }],
+    },
+    {
+      container_id: food,
+      model_id: "3".repeat(32),
+      base_id: baseId,
+      owner_player_id: playerId,
+      label: "Food and medicine",
+      items: [],
+    },
+    {
+      container_id: palMaterials,
+      model_id: "4".repeat(32),
+      base_id: baseId,
+      owner_player_id: playerId,
+      label: "Pal materials",
+      items: [],
+    },
+  ];
+  const plan = {
+    planner: "local-llm",
+    can_execute: true,
+    warnings: ["2 other-player chests were excluded by ownership."],
+    unmapped_items: [],
+    moves: [
+      {
+        source_container_id: inbox,
+        source_slot: 0,
+        item_id: "Coal",
+        display_name: "Coal",
+        count: 184,
+        target_container_id: mining,
+        target_label: "Ore and coal",
+        reason: "Matches the mining storage label.",
+        confidence: "high",
+      },
+      {
+        source_container_id: inbox,
+        source_slot: 1,
+        item_id: "RedBerries",
+        display_name: "Red Berries",
+        count: 320,
+        target_container_id: food,
+        target_label: "Food and medicine",
+        reason: "Matches the food storage label.",
+        confidence: "high",
+      },
+      {
+        source_container_id: inbox,
+        source_slot: 2,
+        item_id: "Leather",
+        display_name: "Leather",
+        count: 76,
+        target_container_id: palMaterials,
+        target_label: "Pal materials",
+        reason: "Matches the Pal material storage label.",
+        confidence: "high",
+      },
+    ],
+    summary: "3 stack moves planned.",
+  };
+  currentStorageSnapshot = {
+    player_id: playerId,
+    excluded_container_count: 2,
+    containers,
+  };
+  show(storageState);
+  renderStorageChests(containers);
+  renderStoragePlan(plan);
+  scanStorageButton.disabled = true;
+  planStorageButton.disabled = true;
+  applyStorageButton.disabled = true;
+  storageMode.textContent = "SANITIZED LOCAL AI PREVIEW";
+  storageStatus.textContent =
+    "3 STACK MOVES READY FOR REVIEW / 2 OTHER-PLAYER CHESTS EXCLUDED";
+}
+
 function renderHistory() {
   historyRoot.replaceChildren();
   history.slice(0, 8).forEach((text) => {
@@ -1119,5 +1231,6 @@ document.addEventListener("keydown", (event) => {
 renderHistory();
 checkHealth();
 if (queryParams.get("view") === "vendors") openVendorDirectory();
-if (queryParams.get("view") === "organizer") openStorageOrganizer();
+if (queryParams.get("demo") === "storage") renderStorageScreenshotDemo();
+else if (queryParams.get("view") === "organizer") openStorageOrganizer();
 window.setInterval(checkHealth, 15000);
