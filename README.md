@@ -61,6 +61,7 @@ speech AI model. It only recognizes the approved yes/no confirmation phrases.
 - In-game `F2` Paldeck overlay through the client-only UE4SS UI prototype
 - In-game `F3` verified vendor directory with native markers and guild sharing
 - In-game `F4` AI Storage Router for labeled, loaded base chests
+- In-game `F5` Private Admin Supplies using a permission-scoped server grant
 
 ## Architecture
 
@@ -211,6 +212,26 @@ contains the same item and at least the requested quantity, shares a base with t
 destination, and targets a labeled chest from the most recent scan. Each apply is limited to 32 stack
 moves and uses Palworld's replicated item-move request. The feature does not edit
 save files, move items in the background, or route to unloaded containers.
+
+### Private Admin Supplies beta
+
+`F5` opens a self-only item catalog in the in-game overlay. It is disabled by default
+and cannot grant anything until the dedicated server has PalDefender configured with
+a bearer token limited to `REST.Items.Give`. The target player ID is fixed in the
+local `.env`; the browser never accepts an arbitrary target.
+
+```dotenv
+ADMIN_SUPPLIES_ENABLED=true
+PALDEFENDER_URL=http://127.0.0.1:8213
+PALDEFENDER_TOKEN=store-a-real-token-only-in-your-local-env
+ADMIN_SUPPLY_PLAYER_ID=steam_your_private_id
+ADMIN_SUPPLY_MAX_COUNT=999999
+```
+
+The companion sends one capacity-validated server request after a two-step
+confirmation. It does not invoke Palworld's broadcast endpoint or the Discord bot.
+PalDefender can still retain a private administrative log on the server. Do not expose
+the PalDefender API directly to the Internet; use a private tunnel or host firewall.
 
 Do not install a second manual UE4SS copy alongside the Workshop version. The installer
 refuses to modify Palworld until the official `Mods\NativeMods\UE4SS` path exists.

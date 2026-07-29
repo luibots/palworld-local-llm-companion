@@ -118,6 +118,48 @@ class VectorStore:
         with self._connect() as connection:
             return int(connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0])
 
+    def list_items(self, query: str = "", limit: int = 40) -> list[tuple[str, str]]:
+        normalized = query.strip().lower()
+        pattern = f"%{normalized}%"
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT title, metadata
+                FROM documents
+                WHERE source_id LIKE 'game:item:%'
+                  AND title GLOB '*[A-Za-z0-9]*'
+                  AND (
+                    ? = ''
+                    OR lower(title) LIKE ?
+                    OR lower(source_id) LIKE ?
+                  )
+                ORDER BY
+                    CASE WHEN lower(title) = ? THEN 0 ELSE 1 END,
+                    CASE
+                        WHEN ? != '' AND lower(title) LIKE ? THEN 0
+                        ELSE 1
+                    END,
+                    lower(title)
+                LIMIT ?
+                """,
+                (
+                    normalized,
+                    pattern,
+                    pattern,
+                    normalized,
+                    normalized,
+                    f"{normalized}%",
+                    max(1, min(limit, 100)),
+                ),
+            ).fetchall()
+        result = []
+        for title, metadata_json in rows:
+            metadata = json.loads(metadata_json)
+            item_id = str(metadata.get("internal_id", "")).strip()
+            if item_id:
+                result.append((item_id, str(title)))
+        return result
+
     def get_cached_answer(self, cache_key: str, max_age_seconds: int) -> Answer | None:
         cutoff = time.time() - max_age_seconds
         with self._connect() as connection:

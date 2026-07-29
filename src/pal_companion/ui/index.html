@@ -17,6 +17,9 @@
           </div>
         </div>
         <div class="topbar-actions">
+          <button id="suppliesButton" class="nav-button supplies-nav" type="button">
+            SUPPLIES <kbd>F5</kbd>
+          </button>
           <button id="storageButton" class="nav-button storage-nav" type="button">
             STORAGE <kbd>F4</kbd>
           </button>
@@ -184,6 +187,49 @@
             <p id="storageStatus" class="storage-status">OPEN IN GAME AND SCAN</p>
           </section>
 
+          <section id="suppliesState" class="supplies-state" hidden>
+            <div class="supplies-head">
+              <div>
+                <span class="section-label">PRIVATE ADMIN</span>
+                <h2>SUPPLY TERMINAL</h2>
+              </div>
+              <div class="supplies-head-actions">
+                <span id="suppliesMode" class="supplies-mode">CHECKING ACCESS</span>
+                <button id="closeSuppliesButton" class="tool-button" type="button">BACK</button>
+              </div>
+            </div>
+            <div class="supplies-layout">
+              <div class="supplies-catalog">
+                <label class="section-label" for="supplySearch">ITEM CATALOG</label>
+                <input
+                  id="supplySearch"
+                  type="search"
+                  autocomplete="off"
+                  maxlength="80"
+                  placeholder="Search item name or internal ID"
+                />
+                <div id="supplyResults" class="supply-results"></div>
+              </div>
+              <div class="supply-grant">
+                <span class="section-label">SELECTED ITEM</span>
+                <div id="selectedSupply" class="selected-supply">NO ITEM SELECTED</div>
+                <label class="section-label" for="supplyCount">QUANTITY</label>
+                <input
+                  id="supplyCount"
+                  type="number"
+                  min="1"
+                  max="999999"
+                  value="1"
+                  inputmode="numeric"
+                />
+                <button id="grantSupplyButton" class="supply-grant-button" type="button" disabled>
+                  GRANT TO LUI
+                </button>
+                <p id="suppliesStatus" class="supplies-status">PRIVATE CHANNEL LOCKED</p>
+              </div>
+            </div>
+          </section>
+
           <div id="answerState" hidden>
             <div class="answer-head">
               <span class="section-label">ANSWER</span>
@@ -228,11 +274,11 @@
       </section>
 
       <footer>
-        <span>F2 COMPANION / F3 VENDORS / F4 STORAGE</span>
+        <span>F2 COMPANION / F3 VENDORS / F4 STORAGE / F5 SUPPLIES</span>
         <span>FACTS FROM DATA. STRATEGY FROM AI.</span>
         <span id="indexCount">0 SOURCES INDEXED</span>
       </footer>
     </main>
-    <script src="/assets/companion.js?v=0.3.1-docs2"></script>
+    <script src="/assets/companion.js?v=0.4.0"></script>
   </body>
 </html>

@@ -176,3 +176,27 @@ class StoragePlan(BaseModel):
     unmapped_items: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     can_execute: bool = False
+
+
+class AdminSupplyItem(BaseModel):
+    item_id: str
+    name: str
+
+
+class AdminSupplyStatus(BaseModel):
+    enabled: bool
+    configured: bool
+    max_count: int = Field(ge=1, le=999_999)
+
+
+class AdminItemGrantRequest(BaseModel):
+    item_id: str = Field(pattern=r"^[A-Za-z0-9_:-]{1,120}$")
+    count: int = Field(ge=1, le=999_999)
+    confirmed: bool
+
+
+class AdminItemGrantResult(BaseModel):
+    item_id: str
+    requested: int
+    granted: int
+    public_announcement: Literal[False] = False

@@ -715,6 +715,24 @@ local function open_storage_organizer()
     end)
 end
 
+local function open_admin_supplies()
+    ExecuteInGameThread(function()
+        local controller = UEHelpers:GetPlayerController()
+        if not valid(controller) then
+            log("PlayerController is not ready")
+            return
+        end
+
+        local url = companion_url(controller) .. "&view=supplies"
+        local ok, message = pcall(show_overlay, controller, url)
+        if not ok then
+            log("Admin Supplies failed: " .. tostring(message))
+            return
+        end
+        log("Private Admin Supplies opened")
+    end)
+end
+
 local function close_overlay()
     local controller = UEHelpers:GetPlayerController()
     if not valid(controller) then
@@ -731,6 +749,7 @@ end
 RegisterKeyBind(Key.F2, toggle_overlay)
 RegisterKeyBind(Key.F3, open_vendor_directory)
 RegisterKeyBind(Key.F4, open_storage_organizer)
+RegisterKeyBind(Key.F5, open_admin_supplies)
 
 LoopAsync(250, function()
     if not valid(browser_widget) then
@@ -764,4 +783,4 @@ LoopAsync(250, function()
     return false
 end)
 
-log("Loaded. F2 companion, F3 vendors, F4 storage organizer.")
+log("Loaded. F2 companion, F3 vendors, F4 storage organizer, F5 private supplies.")

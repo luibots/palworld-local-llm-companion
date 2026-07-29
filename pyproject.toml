@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "palworld-local-llm-companion"
-version = "0.3.1"
+version = "0.4.0"
 description = "Local-first, source-grounded Palworld companion powered by Ollama and RAG."
 readme = "README.md"
 requires-python = ">=3.11"

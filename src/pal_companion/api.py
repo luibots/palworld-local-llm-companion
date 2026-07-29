@@ -2,12 +2,17 @@ import secrets
 from pathlib import Path
 
 import httpx
-from fastapi import Cookie, FastAPI, HTTPException, Request
+from fastapi import Cookie, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .admin_supplies import AdminSupplies, AdminSupplyError
 from .config import Settings
 from .models import (
+    AdminItemGrantRequest,
+    AdminItemGrantResult,
+    AdminSupplyItem,
+    AdminSupplyStatus,
     Answer,
     AskRequest,
     RarePalTarget,
@@ -32,7 +37,8 @@ neural_voice = NeuralVoice(settings.voice_cache_path)
 confirmation_transcriber = ConfirmationTranscriber()
 welcome_message_service = WelcomeMessageService(companion.store)
 storage_organizer = StorageOrganizer(companion.ollama)
-app = FastAPI(title="Palworld Local LLM Companion", version="0.3.1")
+admin_supplies = AdminSupplies(settings)
+app = FastAPI(title="Palworld Local LLM Companion", version="0.4.0")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
 app.mount("/assets", StaticFiles(directory=web_root / "assets"), name="assets")
@@ -67,6 +73,7 @@ async def health() -> dict[str, str | int | bool]:
         ),
         "welcome_message_service": True,
         "storage_organizer": True,
+        "admin_supplies_configured": admin_supplies.configured,
     }
 
 
@@ -112,6 +119,58 @@ async def plan_storage(
     if not secrets.compare_digest(pal_companion_session or "", session_token):
         raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
     return await storage_organizer.plan(snapshot)
+
+
+@app.get("/admin/supplies/status", response_model=AdminSupplyStatus)
+async def admin_supply_status(
+    pal_companion_session: str | None = Cookie(default=None),
+) -> AdminSupplyStatus:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    return AdminSupplyStatus(
+        enabled=admin_supplies.enabled,
+        configured=admin_supplies.configured,
+        max_count=admin_supplies.max_count,
+    )
+
+
+@app.get("/admin/supplies/items", response_model=list[AdminSupplyItem])
+async def admin_supply_items(
+    q: str = Query(default="", max_length=80),
+    pal_companion_session: str | None = Cookie(default=None),
+) -> list[AdminSupplyItem]:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    return [
+        AdminSupplyItem(item_id=item_id, name=name)
+        for item_id, name in companion.store.list_items(q)
+    ]
+
+
+@app.post("/admin/supplies/grant", response_model=AdminItemGrantResult)
+async def grant_admin_supply(
+    grant_request: AdminItemGrantRequest,
+    request: Request,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> AdminItemGrantResult:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    if request.headers.get("x-pal-companion-client") != "ue4ss":
+        raise HTTPException(status_code=403, detail="Admin Supplies is available only in game.")
+    if not grant_request.confirmed:
+        raise HTTPException(status_code=409, detail="Confirm the private item grant first.")
+    try:
+        granted = await admin_supplies.grant(
+            grant_request.item_id,
+            grant_request.count,
+        )
+    except AdminSupplyError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return AdminItemGrantResult(
+        item_id=grant_request.item_id,
+        requested=grant_request.count,
+        granted=granted,
+    )
 
 
 @app.post("/guild/share-vendor")

@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     brave_search_api_key: str = ""
     discord_token: str = ""
     discord_guild_id: int | None = None
+    admin_supplies_enabled: bool = False
+    paldefender_url: str = ""
+    paldefender_token: str = ""
+    admin_supply_player_id: str = ""
+    admin_supply_max_count: int = 999_999
 
     index_path: Path = Path("data/index/companion.sqlite3")
     retrieval_limit: int = 4

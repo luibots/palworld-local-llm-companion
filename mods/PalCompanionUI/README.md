@@ -15,6 +15,13 @@ unlabeled storage, previews every stack move, and submits a confirmed plan throu
 Palworld's replicated item-move request. Other-player and unknown-owner chests fail
 closed. It never edits saves.
 
+Press `F5` to open Private Admin Supplies. The panel searches the locally indexed item
+catalog and submits a two-step-confirmed grant through the loopback companion service.
+The target player is fixed in local configuration and cannot be selected from the UI.
+The companion requires a dedicated-server PalDefender endpoint and a bearer token
+restricted to `REST.Items.Give`. Grants do not call Palworld broadcast or the guild
+Discord queue. PalDefender may retain a private server-side administrative log.
+
 This mod does not contain Ollama, credentials, game data, or server code. It only
 creates an Unreal UMG browser panel and points it at the loopback companion service.
 Answers can be read aloud through the embedded browser's free operating-system voice.

@@ -23,6 +23,7 @@ const statusText = document.querySelector("#statusText");
 const indexCount = document.querySelector("#indexCount");
 const vendorButton = document.querySelector("#vendorButton");
 const storageButton = document.querySelector("#storageButton");
+const suppliesButton = document.querySelector("#suppliesButton");
 const vendorState = document.querySelector("#vendorState");
 const vendorList = document.querySelector("#vendorList");
 const vendorStatus = document.querySelector("#vendorStatus");
@@ -41,6 +42,15 @@ const storageMoveCount = document.querySelector("#storageMoveCount");
 const storageChestList = document.querySelector("#storageChestList");
 const storagePlanList = document.querySelector("#storagePlanList");
 const storageStatus = document.querySelector("#storageStatus");
+const suppliesState = document.querySelector("#suppliesState");
+const suppliesMode = document.querySelector("#suppliesMode");
+const closeSuppliesButton = document.querySelector("#closeSuppliesButton");
+const supplySearch = document.querySelector("#supplySearch");
+const supplyResults = document.querySelector("#supplyResults");
+const selectedSupply = document.querySelector("#selectedSupply");
+const supplyCount = document.querySelector("#supplyCount");
+const grantSupplyButton = document.querySelector("#grantSupplyButton");
+const suppliesStatus = document.querySelector("#suppliesStatus");
 const historyRoot = document.querySelector("#history");
 const emptyState = document.querySelector("#emptyState");
 const loadingState = document.querySelector("#loadingState");
@@ -101,6 +111,11 @@ let vendorsLoaded = false;
 let currentStorageSnapshot = null;
 let currentStoragePlan = null;
 let storageApplyArmed = false;
+let selectedSupplyItem = null;
+let supplyGrantArmed = false;
+let suppliesConfigured = false;
+let supplyMaxCount = 999999;
+let supplySearchTimer = null;
 const markerChime = new Audio("/assets/marker-chime.mp3");
 markerChime.preload = "auto";
 
@@ -130,7 +145,15 @@ function historyAppearance(text) {
 }
 
 function show(target) {
-  [emptyState, loadingState, vendorState, storageState, answerState, errorState].forEach((item) => {
+  [
+    emptyState,
+    loadingState,
+    vendorState,
+    storageState,
+    suppliesState,
+    answerState,
+    errorState,
+  ].forEach((item) => {
     item.hidden = item !== target;
   });
 }
@@ -671,6 +694,148 @@ function renderStorageScreenshotDemo() {
     "3 STACK MOVES READY FOR REVIEW / 2 OTHER-PLAYER CHESTS EXCLUDED";
 }
 
+function resetSupplyGrant() {
+  supplyGrantArmed = false;
+  grantSupplyButton.classList.remove("armed");
+  grantSupplyButton.textContent = "GRANT TO LUI";
+  grantSupplyButton.disabled = !suppliesConfigured || !selectedSupplyItem;
+}
+
+function selectSupplyItem(item, button) {
+  selectedSupplyItem = item;
+  supplyResults.querySelectorAll(".supply-item").forEach((candidate) => {
+    candidate.classList.toggle("selected", candidate === button);
+  });
+  selectedSupply.textContent = `${item.name} / ${item.item_id}`;
+  suppliesStatus.textContent = "READY FOR PRIVATE GRANT";
+  resetSupplyGrant();
+}
+
+function renderSupplyItems(items) {
+  supplyResults.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "storage-empty";
+    empty.textContent = "NO MATCHING INDEXED ITEMS";
+    supplyResults.append(empty);
+    return;
+  }
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "supply-item";
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+    const id = document.createElement("span");
+    id.textContent = item.item_id;
+    button.append(name, id);
+    button.addEventListener("click", () => selectSupplyItem(item, button));
+    supplyResults.append(button);
+  });
+}
+
+async function loadSupplyItems() {
+  supplyResults.replaceChildren();
+  const loading = document.createElement("div");
+  loading.className = "storage-empty";
+  loading.textContent = "SEARCHING ITEM INDEX";
+  supplyResults.append(loading);
+  try {
+    const response = await fetch(
+      `/admin/supplies/items?q=${encodeURIComponent(supplySearch.value.trim())}`,
+      { credentials: "same-origin" },
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Item search failed (${response.status})`);
+    renderSupplyItems(data);
+  } catch (error) {
+    supplyResults.replaceChildren();
+    loading.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "ITEM INDEX UNAVAILABLE";
+    supplyResults.append(loading);
+  }
+}
+
+async function openAdminSupplies() {
+  show(suppliesState);
+  resetSupplyGrant();
+  suppliesMode.textContent = "CHECKING ACCESS";
+  suppliesStatus.textContent = "PRIVATE CHANNEL LOCKED";
+  try {
+    const response = await fetch("/admin/supplies/status", {
+      credentials: "same-origin",
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Status failed (${response.status})`);
+    supplyMaxCount = Math.max(1, Math.min(999999, Number(data.max_count) || 999999));
+    supplyCount.max = String(supplyMaxCount);
+    suppliesConfigured = Boolean(gameClient && data.configured);
+    suppliesMode.textContent = suppliesConfigured
+      ? "LUI / PRIVATE CHANNEL"
+      : gameClient
+        ? "SERVER GRANT NOT CONFIGURED"
+        : "IN-GAME CLIENT REQUIRED";
+    suppliesStatus.textContent = suppliesConfigured
+      ? "NO PUBLIC FEED / TWO-STEP CONFIRMATION"
+      : "ADMIN SUPPLIES REMAINS LOCKED";
+    resetSupplyGrant();
+    await loadSupplyItems();
+    supplySearch.focus();
+  } catch (error) {
+    suppliesConfigured = false;
+    suppliesMode.textContent = "PRIVATE CHANNEL OFFLINE";
+    suppliesStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "SUPPLY SERVICE UNAVAILABLE";
+    resetSupplyGrant();
+  }
+}
+
+async function grantSelectedSupply() {
+  if (!suppliesConfigured || !selectedSupplyItem) return;
+  const count = Math.max(
+    1,
+    Math.min(supplyMaxCount, Math.floor(Number(supplyCount.value) || 1)),
+  );
+  supplyCount.value = String(count);
+  if (!supplyGrantArmed) {
+    supplyGrantArmed = true;
+    grantSupplyButton.classList.add("armed");
+    grantSupplyButton.textContent = `CONFIRM ${count.toLocaleString()} TO LUI`;
+    suppliesStatus.textContent = "CONFIRM THE PRIVATE SERVER GRANT";
+    return;
+  }
+
+  grantSupplyButton.disabled = true;
+  suppliesMode.textContent = "SERVER VALIDATING";
+  suppliesStatus.textContent = "CHECKING ITEM ID, QUANTITY, AND INVENTORY CAPACITY";
+  try {
+    const response = await fetch("/admin/supplies/grant", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Pal-Companion-Client": "ue4ss",
+      },
+      body: JSON.stringify({
+        item_id: selectedSupplyItem.item_id,
+        count,
+        confirmed: true,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Grant failed (${response.status})`);
+    suppliesMode.textContent = "PRIVATE GRANT COMPLETE";
+    suppliesStatus.textContent =
+      `${Number(data.granted).toLocaleString()} ${selectedSupplyItem.name.toUpperCase()} GRANTED / NO PUBLIC ANNOUNCEMENT`;
+  } catch (error) {
+    suppliesMode.textContent = "GRANT REJECTED";
+    suppliesStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "PRIVATE GRANT FAILED";
+  } finally {
+    resetSupplyGrant();
+  }
+}
+
 function renderHistory() {
   historyRoot.replaceChildren();
   history.slice(0, 8).forEach((text) => {
@@ -1198,11 +1363,19 @@ declineMarkersButton.addEventListener("click", () => finishMarkerPrompt(false));
 placeTargetButton.addEventListener("click", placeManualTarget);
 vendorButton.addEventListener("click", openVendorDirectory);
 storageButton.addEventListener("click", openStorageOrganizer);
+suppliesButton.addEventListener("click", openAdminSupplies);
 closeVendorsButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
 closeStorageButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
+closeSuppliesButton.addEventListener("click", () => show(currentAnswer ? answerState : emptyState));
 scanStorageButton.addEventListener("click", requestStorageScan);
 planStorageButton.addEventListener("click", buildStoragePlan);
 applyStorageButton.addEventListener("click", applyStoragePlan);
+grantSupplyButton.addEventListener("click", grantSelectedSupply);
+supplyCount.addEventListener("input", resetSupplyGrant);
+supplySearch.addEventListener("input", () => {
+  window.clearTimeout(supplySearchTimer);
+  supplySearchTimer = window.setTimeout(loadSupplyItems, 180);
+});
 document.addEventListener("keydown", (event) => {
   if (gameClient && event.key === "Escape") {
     event.preventDefault();
@@ -1217,6 +1390,10 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "F4") {
     event.preventDefault();
     openStorageOrganizer();
+  }
+  if (event.key === "F5") {
+    event.preventDefault();
+    openAdminSupplies();
   }
 });
 [targetX, targetY].forEach((input) => {
@@ -1233,4 +1410,5 @@ checkHealth();
 if (queryParams.get("view") === "vendors") openVendorDirectory();
 if (queryParams.get("demo") === "storage") renderStorageScreenshotDemo();
 else if (queryParams.get("view") === "organizer") openStorageOrganizer();
+else if (queryParams.get("view") === "supplies") openAdminSupplies();
 window.setInterval(checkHealth, 15000);
