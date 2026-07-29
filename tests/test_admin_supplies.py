@@ -103,6 +103,37 @@ async def test_admin_progression_rejects_unsupported_or_excessive_grants() -> No
         await service.grant_progression("player_level", 1)
 
 
+@pytest.mark.asyncio
+async def test_admin_supply_rcon_uses_allowlisted_actions_and_fixed_player() -> None:
+    calls: list[tuple[str, str, int]] = []
+
+    async def runner(action: str, item_id: str, amount: int) -> str:
+        calls.append((action, item_id, amount))
+        return "ok"
+
+    service = AdminSupplies(
+        supply_settings(
+            admin_supplies_transport="rcon",
+            paldefender_url="",
+            paldefender_token="",
+        ),
+        rcon_runner=runner,
+    )
+
+    assert service.configured is True
+    assert await service.grant("Glass", 250) == 250
+    assert await service.grant_progression("technology_points", 10) == (10, None)
+    assert await service.grant_progression(
+        "ancient_technology_points",
+        3,
+    ) == (3, None)
+    assert calls == [
+        ("GrantItem", "Glass", 250),
+        ("GrantTechnologyPoints", "", 10),
+        ("GrantAncientTechnologyPoints", "", 3),
+    ]
+
+
 def test_item_catalog_searches_names_and_internal_ids(tmp_path: Path) -> None:
     store = VectorStore(tmp_path / "index.sqlite3")
     documents = [

@@ -19,8 +19,10 @@ class Settings(BaseSettings):
     discord_token: str = ""
     discord_guild_id: int | None = None
     admin_supplies_enabled: bool = False
+    admin_supplies_transport: str = "rest"
     paldefender_url: str = ""
     paldefender_token: str = ""
+    palcommand_rcon_helper: Path | None = None
     admin_supply_player_id: str = ""
     admin_supply_max_count: int = 999_999
     admin_supply_max_progression: int = 10_000

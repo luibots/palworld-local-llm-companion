@@ -1,3 +1,6 @@
+import asyncio
+import json
+from collections.abc import Awaitable, Callable
 from urllib.parse import quote
 
 import httpx
@@ -15,18 +18,64 @@ class AdminSupplies:
         settings: Settings,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
+        rcon_runner: Callable[[str, str, int], Awaitable[str]] | None = None,
     ):
         self.enabled = settings.admin_supplies_enabled
+        self.supply_transport = settings.admin_supplies_transport.lower()
         self.base_url = settings.paldefender_url.rstrip("/")
         self.token = settings.paldefender_token
+        self.rcon_helper = settings.palcommand_rcon_helper
         self.player_id = settings.admin_supply_player_id
         self.max_count = settings.admin_supply_max_count
         self.max_progression = settings.admin_supply_max_progression
         self.transport = transport
+        self.rcon_runner = rcon_runner
 
     @property
     def configured(self) -> bool:
-        return bool(self.enabled and self.base_url and self.token and self.player_id)
+        if not self.enabled or not self.player_id:
+            return False
+        if self.supply_transport == "rcon":
+            return bool(self.rcon_runner or self.rcon_helper)
+        return bool(self.base_url and self.token)
+
+    async def _run_rcon(self, action: str, item_id: str = "", amount: int = 1) -> str:
+        if self.rcon_runner:
+            return await self.rcon_runner(action, item_id, amount)
+        if not self.rcon_helper:
+            raise AdminSupplyError("The private RCON helper is not configured.")
+
+        arguments = [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(self.rcon_helper),
+            "-Action",
+            action,
+            "-Amount",
+            str(amount),
+        ]
+        if item_id:
+            arguments.extend(["-ItemId", item_id])
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *arguments,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=15)
+        except (OSError, TimeoutError) as error:
+            raise AdminSupplyError("The private RCON grant service is unreachable.") from error
+
+        try:
+            payload = json.loads(stdout.decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise AdminSupplyError("The private RCON helper returned invalid data.") from error
+        if process.returncode != 0 or not payload.get("Success"):
+            raise AdminSupplyError("PalDefender rejected the private RCON grant.")
+        return str(payload.get("Response", ""))
 
     async def grant(self, item_id: str, count: int) -> int:
         if not self.configured:
@@ -35,6 +84,10 @@ class AdminSupplies:
             raise AdminSupplyError(
                 f"Quantity must be between 1 and {self.max_count:,}."
             )
+
+        if self.supply_transport == "rcon":
+            await self._run_rcon("GrantItem", item_id, count)
+            return count
 
         endpoint = (
             f"{self.base_url}/v1/pdapi/give/items/"
@@ -86,6 +139,14 @@ class AdminSupplies:
         field = fields.get(kind)
         if field is None:
             raise AdminSupplyError("Unsupported progression grant.")
+
+        if self.supply_transport == "rcon":
+            actions = {
+                "technology_points": "GrantTechnologyPoints",
+                "ancient_technology_points": "GrantAncientTechnologyPoints",
+            }
+            await self._run_rcon(actions[kind], amount=amount)
+            return amount, None
 
         endpoint = (
             f"{self.base_url}/v1/pdapi/give/progression/"

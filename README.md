@@ -217,15 +217,20 @@ save files, move items in the background, or route to unloaded containers.
 
 `F5` opens a self-only item and progression terminal in the in-game overlay. It is
 disabled by default and cannot grant anything until the dedicated server has
-PalDefender configured with a bearer token limited to `REST.Items.Give` and
-`REST.Progression.Give`. The target player ID is fixed in the local `.env`; the
+PalDefender configured. The target player ID is fixed in the local `.env`; the
 browser never accepts an arbitrary target. Progression controls support technology
 points and Ancient Technology Points, not arbitrary player selection.
 
+Host Havoc servers can use the local DPAPI-backed RCON helper instead of exposing
+PalDefender's HTTP API. The helper only accepts item grants, technology points,
+Ancient Technology Points, and a read-only version check.
+
 ```dotenv
 ADMIN_SUPPLIES_ENABLED=true
+ADMIN_SUPPLIES_TRANSPORT=rest
 PALDEFENDER_URL=http://127.0.0.1:8213
 PALDEFENDER_TOKEN=store-a-real-token-only-in-your-local-env
+PALCOMMAND_RCON_HELPER=
 ADMIN_SUPPLY_PLAYER_ID=steam_your_private_id
 ADMIN_SUPPLY_MAX_COUNT=999999
 ADMIN_SUPPLY_MAX_PROGRESSION=10000
