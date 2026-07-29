@@ -705,7 +705,7 @@ function renderStorageScreenshotDemo() {
 function resetSupplyGrant() {
   supplyGrantArmed = false;
   grantSupplyButton.classList.remove("armed");
-  grantSupplyButton.textContent = "GRANT TO LUI";
+  grantSupplyButton.textContent = "GRANT TO PILOT";
   grantSupplyButton.disabled = !suppliesConfigured || !selectedSupplyItem;
 }
 
@@ -795,7 +795,7 @@ async function openAdminSupplies() {
     ancientTechnologyPointCount.max = String(progressionMaxCount);
     suppliesConfigured = Boolean(gameClient && data.configured);
     suppliesMode.textContent = suppliesConfigured
-      ? "LUI / PRIVATE CHANNEL"
+      ? "LOCAL PILOT / PRIVATE CHANNEL"
       : gameClient
         ? "SERVER GRANT NOT CONFIGURED"
         : "IN-GAME CLIENT REQUIRED";
@@ -826,7 +826,7 @@ async function grantSelectedSupply() {
   if (!supplyGrantArmed) {
     supplyGrantArmed = true;
     grantSupplyButton.classList.add("armed");
-    grantSupplyButton.textContent = `CONFIRM ${count.toLocaleString()} TO LUI`;
+    grantSupplyButton.textContent = `CONFIRM ${count.toLocaleString()} TO PILOT`;
     suppliesStatus.textContent = "CONFIRM THE PRIVATE SERVER GRANT";
     return;
   }
@@ -881,7 +881,7 @@ async function grantProgression(kind) {
     progressionGrantArmed = kind;
     button.classList.add("armed");
     button.textContent = `CONFIRM ${amount.toLocaleString()}`;
-    suppliesStatus.textContent = `CONFIRM ${label} FOR LUI`;
+    suppliesStatus.textContent = `CONFIRM ${label} FOR LOCAL PILOT`;
     return;
   }
 

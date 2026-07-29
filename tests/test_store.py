@@ -333,7 +333,7 @@ def test_answer_cache_separates_player_levels() -> None:
         "Where is Foxcicle?",
         allow_web=False,
         include_live=True,
-        player_name="Luis",
+        player_name="Pilot",
         player_level=12,
         settings=settings,
     )
@@ -341,7 +341,7 @@ def test_answer_cache_separates_player_levels() -> None:
         "Where is Foxcicle?",
         allow_web=False,
         include_live=True,
-        player_name="Luis",
+        player_name="Pilot",
         player_level=50,
         settings=settings,
     )
@@ -350,18 +350,18 @@ def test_answer_cache_separates_player_levels() -> None:
 
 @pytest.mark.asyncio
 async def test_client_level_becomes_grounded_live_context() -> None:
-    sources = await PalworldClient("", "").live_context(player_name="Luis", player_level=23)
+    sources = await PalworldClient("", "").live_context(player_name="Pilot", player_level=23)
     assert len(sources) == 1
     assert sources[0].source_id == "live:current-player"
-    assert "Luis: level 23" in sources[0].text
+    assert "Pilot: level 23" in sources[0].text
 
 
 def test_current_player_matches_name_or_only_online_player() -> None:
     players = [
-        {"name": "Luis", "level": 23},
+        {"name": "Pilot", "level": 23},
         {"name": "Aye", "level": 40},
     ]
-    assert _current_player(players, "luis") == players[0]
+    assert _current_player(players, "pilot") == players[0]
     assert _current_player([players[1]], None) == players[1]
 
 
@@ -398,12 +398,12 @@ def test_vendor_share_queue_contains_only_catalog_data(
     vendor = find_vendor("desolate-church")
     assert vendor is not None
 
-    queue_path = queue_vendor_share(vendor, "@Luis <everyone>")
+    queue_path = queue_vendor_share(vendor, "@Pilot <everyone>")
     event = json.loads(queue_path.read_text(encoding="utf-8"))
 
     assert event["event_type"] == "guild_location"
     assert event["vendor_id"] == "desolate-church"
-    assert event["requested_by"] == "Luis everyone"
+    assert event["requested_by"] == "Pilot everyone"
     assert "password" not in event
 
 
