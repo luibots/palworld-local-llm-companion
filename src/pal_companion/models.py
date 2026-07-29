@@ -187,6 +187,7 @@ class AdminSupplyStatus(BaseModel):
     enabled: bool
     configured: bool
     max_count: int = Field(ge=1, le=999_999)
+    max_progression: int = Field(ge=1, le=999_999)
 
 
 class AdminItemGrantRequest(BaseModel):
@@ -199,4 +200,18 @@ class AdminItemGrantResult(BaseModel):
     item_id: str
     requested: int
     granted: int
+    public_announcement: Literal[False] = False
+
+
+class AdminProgressionGrantRequest(BaseModel):
+    kind: Literal["technology_points", "ancient_technology_points"]
+    amount: int = Field(ge=1, le=999_999)
+    confirmed: bool
+
+
+class AdminProgressionGrantResult(BaseModel):
+    kind: Literal["technology_points", "ancient_technology_points"]
+    requested: int
+    granted: int
+    total: int | None = None
     public_announcement: Literal[False] = False

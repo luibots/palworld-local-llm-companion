@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     paldefender_token: str = ""
     admin_supply_player_id: str = ""
     admin_supply_max_count: int = 999_999
+    admin_supply_max_progression: int = 10_000
 
     index_path: Path = Path("data/index/companion.sqlite3")
     retrieval_limit: int = 4

@@ -11,6 +11,8 @@ from .config import Settings
 from .models import (
     AdminItemGrantRequest,
     AdminItemGrantResult,
+    AdminProgressionGrantRequest,
+    AdminProgressionGrantResult,
     AdminSupplyItem,
     AdminSupplyStatus,
     Answer,
@@ -38,7 +40,7 @@ confirmation_transcriber = ConfirmationTranscriber()
 welcome_message_service = WelcomeMessageService(companion.store)
 storage_organizer = StorageOrganizer(companion.ollama)
 admin_supplies = AdminSupplies(settings)
-app = FastAPI(title="Palworld Local LLM Companion", version="0.4.0")
+app = FastAPI(title="Palworld Local LLM Companion", version="0.4.1")
 web_root = Path(__file__).with_name("ui")
 session_token = secrets.token_urlsafe(32)
 app.mount("/assets", StaticFiles(directory=web_root / "assets"), name="assets")
@@ -131,6 +133,7 @@ async def admin_supply_status(
         enabled=admin_supplies.enabled,
         configured=admin_supplies.configured,
         max_count=admin_supplies.max_count,
+        max_progression=admin_supplies.max_progression,
     )
 
 
@@ -170,6 +173,36 @@ async def grant_admin_supply(
         item_id=grant_request.item_id,
         requested=grant_request.count,
         granted=granted,
+    )
+
+
+@app.post(
+    "/admin/supplies/progression",
+    response_model=AdminProgressionGrantResult,
+)
+async def grant_admin_progression(
+    grant_request: AdminProgressionGrantRequest,
+    request: Request,
+    pal_companion_session: str | None = Cookie(default=None),
+) -> AdminProgressionGrantResult:
+    if not secrets.compare_digest(pal_companion_session or "", session_token):
+        raise HTTPException(status_code=403, detail="Open the companion UI to start a session.")
+    if request.headers.get("x-pal-companion-client") != "ue4ss":
+        raise HTTPException(status_code=403, detail="Admin Supplies is available only in game.")
+    if not grant_request.confirmed:
+        raise HTTPException(status_code=409, detail="Confirm the private progression grant first.")
+    try:
+        granted, total = await admin_supplies.grant_progression(
+            grant_request.kind,
+            grant_request.amount,
+        )
+    except AdminSupplyError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return AdminProgressionGrantResult(
+        kind=grant_request.kind,
+        requested=grant_request.amount,
+        granted=granted,
+        total=total,
     )
 
 

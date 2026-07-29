@@ -61,7 +61,7 @@ speech AI model. It only recognizes the approved yes/no confirmation phrases.
 - In-game `F2` Paldeck overlay through the client-only UE4SS UI prototype
 - In-game `F3` verified vendor directory with native markers and guild sharing
 - In-game `F4` AI Storage Router for labeled, loaded base chests
-- In-game `F5` Private Admin Supplies using a permission-scoped server grant
+- In-game `F5` Private Admin Supplies for items and self-only technology points
 
 ## Architecture
 
@@ -215,10 +215,12 @@ save files, move items in the background, or route to unloaded containers.
 
 ### Private Admin Supplies beta
 
-`F5` opens a self-only item catalog in the in-game overlay. It is disabled by default
-and cannot grant anything until the dedicated server has PalDefender configured with
-a bearer token limited to `REST.Items.Give`. The target player ID is fixed in the
-local `.env`; the browser never accepts an arbitrary target.
+`F5` opens a self-only item and progression terminal in the in-game overlay. It is
+disabled by default and cannot grant anything until the dedicated server has
+PalDefender configured with a bearer token limited to `REST.Items.Give` and
+`REST.Progression.Give`. The target player ID is fixed in the local `.env`; the
+browser never accepts an arbitrary target. Progression controls support technology
+points and Ancient Technology Points, not arbitrary player selection.
 
 ```dotenv
 ADMIN_SUPPLIES_ENABLED=true
@@ -226,12 +228,14 @@ PALDEFENDER_URL=http://127.0.0.1:8213
 PALDEFENDER_TOKEN=store-a-real-token-only-in-your-local-env
 ADMIN_SUPPLY_PLAYER_ID=steam_your_private_id
 ADMIN_SUPPLY_MAX_COUNT=999999
+ADMIN_SUPPLY_MAX_PROGRESSION=10000
 ```
 
-The companion sends one capacity-validated server request after a two-step
-confirmation. It does not invoke Palworld's broadcast endpoint or the Discord bot.
-PalDefender can still retain a private administrative log on the server. Do not expose
-the PalDefender API directly to the Internet; use a private tunnel or host firewall.
+The companion sends one validated server request after a two-step confirmation. Item
+grants remain subject to inventory capacity. It does not invoke Palworld's broadcast
+endpoint or the Discord bot. PalDefender can still retain a private administrative log
+on the server. Do not expose the PalDefender API directly to the Internet; use a
+private tunnel or host firewall.
 
 Do not install a second manual UE4SS copy alongside the Workshop version. The installer
 refuses to modify Palworld until the official `Mods\NativeMods\UE4SS` path exists.

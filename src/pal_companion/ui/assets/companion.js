@@ -50,6 +50,12 @@ const supplyResults = document.querySelector("#supplyResults");
 const selectedSupply = document.querySelector("#selectedSupply");
 const supplyCount = document.querySelector("#supplyCount");
 const grantSupplyButton = document.querySelector("#grantSupplyButton");
+const technologyPointCount = document.querySelector("#technologyPointCount");
+const ancientTechnologyPointCount = document.querySelector("#ancientTechnologyPointCount");
+const grantTechnologyPointsButton = document.querySelector("#grantTechnologyPointsButton");
+const grantAncientTechnologyPointsButton = document.querySelector(
+  "#grantAncientTechnologyPointsButton",
+);
 const suppliesStatus = document.querySelector("#suppliesStatus");
 const historyRoot = document.querySelector("#history");
 const emptyState = document.querySelector("#emptyState");
@@ -115,6 +121,8 @@ let selectedSupplyItem = null;
 let supplyGrantArmed = false;
 let suppliesConfigured = false;
 let supplyMaxCount = 999999;
+let progressionMaxCount = 10000;
+let progressionGrantArmed = null;
 let supplySearchTimer = null;
 const markerChime = new Audio("/assets/marker-chime.mp3");
 markerChime.preload = "auto";
@@ -701,6 +709,16 @@ function resetSupplyGrant() {
   grantSupplyButton.disabled = !suppliesConfigured || !selectedSupplyItem;
 }
 
+function resetProgressionGrant() {
+  progressionGrantArmed = null;
+  grantTechnologyPointsButton.classList.remove("armed");
+  grantAncientTechnologyPointsButton.classList.remove("armed");
+  grantTechnologyPointsButton.textContent = "GRANT";
+  grantAncientTechnologyPointsButton.textContent = "GRANT";
+  grantTechnologyPointsButton.disabled = !suppliesConfigured;
+  grantAncientTechnologyPointsButton.disabled = !suppliesConfigured;
+}
+
 function selectSupplyItem(item, button) {
   selectedSupplyItem = item;
   supplyResults.querySelectorAll(".supply-item").forEach((candidate) => {
@@ -768,7 +786,13 @@ async function openAdminSupplies() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || `Status failed (${response.status})`);
     supplyMaxCount = Math.max(1, Math.min(999999, Number(data.max_count) || 999999));
+    progressionMaxCount = Math.max(
+      1,
+      Math.min(999999, Number(data.max_progression) || 10000),
+    );
     supplyCount.max = String(supplyMaxCount);
+    technologyPointCount.max = String(progressionMaxCount);
+    ancientTechnologyPointCount.max = String(progressionMaxCount);
     suppliesConfigured = Boolean(gameClient && data.configured);
     suppliesMode.textContent = suppliesConfigured
       ? "LUI / PRIVATE CHANNEL"
@@ -779,6 +803,7 @@ async function openAdminSupplies() {
       ? "NO PUBLIC FEED / TWO-STEP CONFIRMATION"
       : "ADMIN SUPPLIES REMAINS LOCKED";
     resetSupplyGrant();
+    resetProgressionGrant();
     await loadSupplyItems();
     supplySearch.focus();
   } catch (error) {
@@ -787,6 +812,7 @@ async function openAdminSupplies() {
     suppliesStatus.textContent =
       error instanceof Error ? error.message.toUpperCase() : "SUPPLY SERVICE UNAVAILABLE";
     resetSupplyGrant();
+    resetProgressionGrant();
   }
 }
 
@@ -833,6 +859,62 @@ async function grantSelectedSupply() {
       error instanceof Error ? error.message.toUpperCase() : "PRIVATE GRANT FAILED";
   } finally {
     resetSupplyGrant();
+  }
+}
+
+async function grantProgression(kind) {
+  if (!suppliesConfigured) return;
+  const isAncient = kind === "ancient_technology_points";
+  const input = isAncient ? ancientTechnologyPointCount : technologyPointCount;
+  const button = isAncient
+    ? grantAncientTechnologyPointsButton
+    : grantTechnologyPointsButton;
+  const label = isAncient ? "ANCIENT POINTS" : "TECH POINTS";
+  const amount = Math.max(
+    1,
+    Math.min(progressionMaxCount, Math.floor(Number(input.value) || 1)),
+  );
+  input.value = String(amount);
+
+  if (progressionGrantArmed !== kind) {
+    resetProgressionGrant();
+    progressionGrantArmed = kind;
+    button.classList.add("armed");
+    button.textContent = `CONFIRM ${amount.toLocaleString()}`;
+    suppliesStatus.textContent = `CONFIRM ${label} FOR LUI`;
+    return;
+  }
+
+  grantTechnologyPointsButton.disabled = true;
+  grantAncientTechnologyPointsButton.disabled = true;
+  suppliesMode.textContent = "SERVER VALIDATING";
+  suppliesStatus.textContent = `VALIDATING PRIVATE ${label} GRANT`;
+  try {
+    const response = await fetch("/admin/supplies/progression", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Pal-Companion-Client": "ue4ss",
+      },
+      body: JSON.stringify({
+        kind,
+        amount,
+        confirmed: true,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || `Grant failed (${response.status})`);
+    suppliesMode.textContent = "PRIVATE GRANT COMPLETE";
+    const total = data.total == null ? "" : ` / NEW TOTAL ${Number(data.total).toLocaleString()}`;
+    suppliesStatus.textContent =
+      `${Number(data.granted).toLocaleString()} ${label} GRANTED${total} / NO PUBLIC ANNOUNCEMENT`;
+  } catch (error) {
+    suppliesMode.textContent = "GRANT REJECTED";
+    suppliesStatus.textContent =
+      error instanceof Error ? error.message.toUpperCase() : "PRIVATE GRANT FAILED";
+  } finally {
+    resetProgressionGrant();
   }
 }
 
@@ -1372,6 +1454,14 @@ planStorageButton.addEventListener("click", buildStoragePlan);
 applyStorageButton.addEventListener("click", applyStoragePlan);
 grantSupplyButton.addEventListener("click", grantSelectedSupply);
 supplyCount.addEventListener("input", resetSupplyGrant);
+grantTechnologyPointsButton.addEventListener("click", () =>
+  grantProgression("technology_points"),
+);
+grantAncientTechnologyPointsButton.addEventListener("click", () =>
+  grantProgression("ancient_technology_points"),
+);
+technologyPointCount.addEventListener("input", resetProgressionGrant);
+ancientTechnologyPointCount.addEventListener("input", resetProgressionGrant);
 supplySearch.addEventListener("input", () => {
   window.clearTimeout(supplySearchTimer);
   supplySearchTimer = window.setTimeout(loadSupplyItems, 180);

@@ -21,6 +21,7 @@ class AdminSupplies:
         self.token = settings.paldefender_token
         self.player_id = settings.admin_supply_player_id
         self.max_count = settings.admin_supply_max_count
+        self.max_progression = settings.admin_supply_max_progression
         self.transport = transport
 
     @property
@@ -70,3 +71,59 @@ class AdminSupplies:
         if granted < 1:
             raise AdminSupplyError("The server did not grant any items.")
         return granted
+
+    async def grant_progression(self, kind: str, amount: int) -> tuple[int, int | None]:
+        if not self.configured:
+            raise AdminSupplyError("Private Admin Supplies is not configured.")
+        if amount < 1 or amount > self.max_progression:
+            raise AdminSupplyError(
+                f"Progression amount must be between 1 and {self.max_progression:,}."
+            )
+        fields = {
+            "technology_points": "TechnologyPoints",
+            "ancient_technology_points": "AncientTechnologyPoints",
+        }
+        field = fields.get(kind)
+        if field is None:
+            raise AdminSupplyError("Unsupported progression grant.")
+
+        endpoint = (
+            f"{self.base_url}/v1/pdapi/give/progression/"
+            f"{quote(self.player_id, safe='')}"
+        )
+        try:
+            async with httpx.AsyncClient(
+                timeout=10,
+                transport=self.transport,
+            ) as client:
+                response = await client.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {self.token}"},
+                    json={field: amount},
+                )
+        except httpx.HTTPError as error:
+            raise AdminSupplyError("The private server grant service is unreachable.") from error
+
+        if response.status_code == 401:
+            raise AdminSupplyError("The private server grant token was rejected.")
+        if response.status_code == 403:
+            raise AdminSupplyError("The private token cannot grant progression.")
+        if response.status_code >= 400:
+            try:
+                detail = response.json().get("Error", {}).get("Message")
+            except ValueError:
+                detail = None
+            raise AdminSupplyError(
+                detail or f"Progression grant failed ({response.status_code})."
+            )
+
+        try:
+            payload = response.json()
+            granted = int(payload["Granted"][field])
+            raw_total = payload.get("Totals", {}).get(field)
+            total = int(raw_total) if raw_total is not None else None
+        except (KeyError, TypeError, ValueError) as error:
+            raise AdminSupplyError("The server returned an invalid grant response.") from error
+        if granted < 1:
+            raise AdminSupplyError("The server did not grant any progression.")
+        return granted, total
